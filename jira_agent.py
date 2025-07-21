@@ -4,7 +4,7 @@ Jira Agent that directly handles tool calls without LangGraph complexity.
 
 from typing import List, Dict, Any
 # OpenAI support (commented for future use)
-# from langchain_openai import ChatOpenAI
+from langchain_openai import ChatOpenAI
 
 # Ollama support
 from langchain_ollama import ChatOllama
@@ -36,31 +36,31 @@ class JiraAgent:
         initialize_tools(jira_client)
         
         # OpenAI Configuration (commented for future use)
-        # openai_key = os.getenv("OPENAI_API_KEY")
-        # if not openai_key:
-        #     logger.error("OPENAI_API_KEY not found in environment variables")
-        #     raise ValueError("OPENAI_API_KEY is required")
-        # 
-        # logger.debug(f"OpenAI API key found: {openai_key[:10]}...")
-        # 
-        # self.llm = ChatOpenAI(
-        #     model="gpt-4o-mini",
-        #     api_key=openai_key,
-        #     temperature=0.1
-        # )
+        openai_key = os.getenv("OPENAI_API_KEY")
+        if not openai_key:
+            logger.error("OPENAI_API_KEY not found in environment variables")
+            raise ValueError("OPENAI_API_KEY is required")
         
-        # Ollama Configuration
-        ollama_model = os.getenv("OLLAMA_MODEL", "llama3.1:8b")
-        ollama_base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+        logger.debug(f"OpenAI API key found: {openai_key[:10]}...")
         
-        logger.debug(f"Using Ollama model: {ollama_model}")
-        logger.debug(f"Ollama base URL: {ollama_base_url}")
-        
-        self.llm = ChatOllama(
-            model=ollama_model,
-            base_url=ollama_base_url,
+        self.llm = ChatOpenAI(
+            model="gpt-4o-mini",
+            api_key=openai_key,
             temperature=0.1
         )
+        
+        # Ollama Configuration
+        # ollama_model = os.getenv("OLLAMA_MODEL", "llama3.1:8b")
+        # ollama_base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+        
+        # logger.debug(f"Using Ollama model: {ollama_model}")
+        # logger.debug(f"Ollama base URL: {ollama_base_url}")
+        
+        # self.llm = ChatOllama(
+        #     model=ollama_model,
+        #     base_url=ollama_base_url,
+        #     temperature=0.1
+        # )
         
         # Bind tools to the LLM
         logger.debug(f"Binding {len(JIRA_TOOLS)} tools to LLM")

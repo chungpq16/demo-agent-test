@@ -49,14 +49,34 @@ class JiraClient:
             Project-scoped JQL query
         """
         if not self.project_key:
+            logger.debug(f"No project scoping - returning original JQL: {base_jql}")
             return base_jql
         
-        # If base_jql is empty or just ordering, add project filter
-        if not base_jql or base_jql.strip().startswith("ORDER BY"):
-            return f'project = "{self.project_key}" {base_jql}'
+        # If base_jql is empty, just add project filter
+        if not base_jql:
+            result = f'project = "{self.project_key}"'
+            logger.debug(f"Empty base JQL - project filter only: {result}")
+            return result
         
-        # If base_jql has conditions, add project filter with AND
-        return f'project = "{self.project_key}" AND ({base_jql})'
+        # If base_jql only contains ORDER BY, add project filter before it
+        if base_jql.strip().startswith("ORDER BY"):
+            result = f'project = "{self.project_key}" {base_jql}'
+            logger.debug(f"ORDER BY only - added project filter: {result}")
+            return result
+        
+        # If base_jql contains ORDER BY, separate conditions from ordering
+        if "ORDER BY" in base_jql:
+            parts = base_jql.split("ORDER BY", 1)
+            conditions = parts[0].strip()
+            ordering = f"ORDER BY {parts[1].strip()}"
+            result = f'project = "{self.project_key}" AND ({conditions}) {ordering}'
+            logger.debug(f"Complex JQL with ORDER BY - scoped: {base_jql} -> {result}")
+            return result
+        
+        # If base_jql has only conditions (no ORDER BY), add project filter with AND
+        result = f'project = "{self.project_key}" AND ({base_jql})'
+        logger.debug(f"Simple conditions - scoped: {base_jql} -> {result}")
+        return result
     
     def get_issues_by_status(self, status: str, limit: int = 100) -> pd.DataFrame:
         """
