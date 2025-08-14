@@ -1,0 +1,15 @@
+# Core dependencies
+streamlit==1.29.0
+python-dotenv==1.0.0
+requests==2.31.0
+
+# LangChain and LangGraph dependencies - let pip resolve compatible versions
+langchain>=0.2.0,<0.3.0
+langgraph>=0.1.0,<0.2.0
+langchain-openai>=0.1.0,<0.2.0
+
+# OpenAI
+openai>=1.30.0,<2.0.0
+
+# Flask (for the mockup API)
+flask>=3.0.0
