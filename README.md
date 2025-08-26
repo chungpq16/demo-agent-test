@@ -2,6 +2,39 @@
 
 An agentic AI chatbot for Jira issue management built with LangGraph and Streamlit. This application provides a conversational interface to interact with Jira issues, retrieve information, and perform AI-powered analysis.
 
+## 🏗️ Professional Architecture
+
+This application follows a professional folder structure for maintainability and scalability:
+
+```
+jira-ai-chatbot/
+├── src/                     # Source code
+│   ├── core/               # Core application logic
+│   ├── agents/             # AI agents
+│   ├── clients/            # External service clients  
+│   ├── tools/              # LangChain tools
+│   ├── ui/                 # User interfaces
+│   └── utils/              # Utilities and configuration
+├── tests/                  # Test files
+├── docs/                   # Documentation
+├── scripts/                # Utility scripts
+└── main.py                 # Main entry point
+```
+
+See [docs/structure.md](docs/structure.md) for detailed architecture documentation.
+
+## 🚀 Quick Start
+
+### Run the Web Interface
+```bash
+python main.py
+```
+
+### Alternative: Direct Streamlit
+```bash
+streamlit run src/ui/app.py
+```
+
 ## ✨ Features
 
 - 🔍 **Retrieve Issues by Status**: Get all issues with specific statuses (TO-DO, In Progress, Done, etc.)
@@ -253,6 +286,21 @@ Input: "Analyze all tickets"
 └── Response: Detailed analysis with recommendations
 ```
 
+#### Example 4: Create Issue
+```
+Input: "Create a task to fix the login bug with high priority"
+├── Agent: Calls create_jira_issue(
+│              summary="Fix login bug",
+│              description="Login functionality issue",
+│              issue_type="Task",
+│              priority="High"
+│          )
+├── Client: Prepares issue data with project scoping
+├── API: Creates new issue in Jira
+├── Tool: Returns created issue details
+└── Response: Confirmation with issue key and URL
+```
+
 ### File Structure
 ```
 jira-summarization/
@@ -459,7 +507,7 @@ Assistant: 📊 **Project Analysis Summary**
 
 ## 🔧 Available Tools & Operations
 
-The system provides 5 core tools that handle different aspects of Jira interaction:
+The system provides 7 core tools that handle different aspects of Jira interaction:
 
 ### 1. **get_issues_by_status**
 - **Purpose**: Retrieve issues filtered by specific status
@@ -491,6 +539,18 @@ The system provides 5 core tools that handle different aspects of Jira interacti
 - **Process**: Project enumeration → Metadata collection
 - **Output**: Project list with keys, names, leads, and types
 
+### 6. **get_all_issues**
+- **Purpose**: Retrieve all issues without status filtering
+- **Usage**: "Show me all issues", "List everything"
+- **Process**: Bulk query → All issues → Formatted list
+- **Output**: Complete issue list with basic details
+
+### 7. **create_jira_issue**
+- **Purpose**: Create new Jira issues
+- **Usage**: "Create a task for...", "Add a bug report for..."
+- **Process**: Requirements analysis → Issue data preparation → API creation
+- **Output**: Created issue details with key, URL, and confirmation
+
 ### Tool Selection Logic
 
 The AI agent uses the following decision tree:
@@ -502,6 +562,8 @@ User Query Analysis
 ├── Asks for analysis/insights? → get_all_issues_for_analysis
 ├── Complex search criteria? → search_issues_by_jql
 ├── Asks about projects? → get_project_summary
+├── Wants to create issue? → create_jira_issue
+├── General list request? → get_all_issues
 └── General question? → Direct AI response
 ```
 

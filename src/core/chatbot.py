@@ -2,9 +2,9 @@
 Main Chatbot class integrating all components for Jira issue management.
 """
 
-from jira_agent import JiraAgent
-from jira_client import JiraClient
-from debug_utils import setup_logging, get_debug_info
+from src.agents.jira_agent import JiraAgent
+from src.clients.jira_client import JiraClient
+from src.utils.debug_utils import setup_logging, get_debug_info
 import logging
 import os
 from typing import List, Dict, Any, Optional

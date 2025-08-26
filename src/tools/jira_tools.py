@@ -4,7 +4,7 @@ Jira Tools for LangGraph Agent - Tools for interacting with Jira API.
 
 from typing import List, Dict, Any, Optional
 from langchain_core.tools import tool
-from jira_client import JiraClient
+from src.clients.jira_client import JiraClient
 import pandas as pd
 import json
 import logging
@@ -269,6 +269,100 @@ def get_project_summary() -> str:
         logger.error(f"Error in get_project_summary: {e}")
         return f"Error retrieving project information: {str(e)}"
 
+@tool  
+def create_jira_issue(summary: str, description: str = "", issue_type: str = "Task", 
+                     priority: str = "Medium", assignee: str = None, labels: str = "") -> str:
+    """
+    Create a new Jira issue.
+    
+    Args:
+        summary: Issue summary/title (required)
+        description: Issue description (optional)
+        issue_type: Issue type - Task, Bug, Story, Epic, etc. (default: Task)
+        priority: Issue priority - Low, Medium, High, Critical (default: Medium)
+        assignee: Username to assign the issue to (optional)
+        labels: Comma-separated labels to add to the issue (optional)
+        
+    Returns:
+        JSON string containing created issue information
+    """
+    if not jira_client:
+        return "Error: Jira client not initialized. Please check your credentials."
+    
+    try:
+        # Parse labels if provided
+        labels_list = []
+        if labels:
+            labels_list = [label.strip() for label in labels.split(",") if label.strip()]
+        
+        # Create the issue
+        created_issue = jira_client.create_issue(
+            summary=summary,
+            description=description,
+            issue_type=issue_type,
+            priority=priority,
+            assignee=assignee,
+            labels=labels_list
+        )
+        
+        return json.dumps(created_issue, indent=2, default=str)
+        
+    except Exception as e:
+        logger.error(f"Error in create_jira_issue: {e}")
+        return f"Error creating issue: {str(e)}"
+
+@tool
+def diagnose_project_setup() -> str:
+    """
+    Diagnose project setup and permissions for issue creation.
+    
+    Returns:
+        JSON string containing project diagnostics
+    """
+    if not jira_client:
+        return "Error: Jira client not initialized. Please check your credentials."
+    
+    try:
+        project_key = jira_client.get_current_project_scope()
+        if not project_key:
+            return "No project scope configured. Please set JIRA_PROJECT_KEY environment variable."
+        
+        # Get project metadata
+        metadata = jira_client.get_project_metadata(project_key)
+        
+        # Test basic project access
+        try:
+            projects = jira_client.get_project_info()
+            accessible_projects = [p['key'] for p in projects]
+            project_accessible = project_key in accessible_projects
+        except Exception as e:
+            project_accessible = False
+            accessible_projects = []
+        
+        diagnosis = {
+            'project_key': project_key,
+            'project_accessible': project_accessible,
+            'project_metadata': metadata,
+            'accessible_projects': accessible_projects,
+            'recommendations': []
+        }
+        
+        # Add recommendations based on findings
+        if not project_accessible:
+            diagnosis['recommendations'].append(f"Project '{project_key}' is not accessible. Check if the key is correct and you have permissions.")
+        
+        if not metadata.get('available_issue_types'):
+            diagnosis['recommendations'].append("No issue types found. Try using common types: Task, Bug, Story, Epic")
+        
+        if not accessible_projects:
+            diagnosis['recommendations'].append("No projects accessible. Check your Jira credentials and permissions.")
+        
+        return json.dumps(diagnosis, indent=2, default=str)
+        
+    except Exception as e:
+        logger.error(f"Error in diagnose_project_setup: {e}")
+        return f"Error diagnosing project setup: {str(e)}"
+
 # List of all available tools for easy import
 JIRA_TOOLS = [
     get_issues_by_status,
@@ -276,5 +370,7 @@ JIRA_TOOLS = [
     get_all_issues,
     get_all_issues_for_analysis,
     search_issues_by_jql,
-    get_project_summary
+    get_project_summary,
+    create_jira_issue,
+    diagnose_project_setup
 ]

@@ -5,8 +5,8 @@ Streamlit application for Jira AI Chatbot.
 import streamlit as st
 import os
 from dotenv import load_dotenv
-from chatbot import JiraChatbot
-from debug_utils import setup_logging
+from src.core.chatbot import JiraChatbot
+from src.utils.debug_utils import setup_logging
 import logging
 
 # Load environment variables
@@ -178,7 +178,7 @@ def main():
     else:
         st.markdown("*🌐 Searching across all accessible projects*")
     
-    st.markdown("*Intelligent Jira issue management powered by Ollama Llama3.1*")
+    st.markdown("*Intelligent Jira issue management powered by Custom LLM Farm*")
     
     # Initialize session state for messages
     if "messages" not in st.session_state:

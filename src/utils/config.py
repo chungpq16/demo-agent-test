@@ -16,8 +16,17 @@ class Config:
     JIRA_SERVER_URL = os.getenv("JIRA_SERVER_URL")
     JIRA_USERNAME = os.getenv("JIRA_USERNAME") 
     JIRA_API_TOKEN = os.getenv("JIRA_API_TOKEN")
+    JIRA_PROJECT_KEY = os.getenv("JIRA_PROJECT_KEY")  # Optional project scoping
     
-    # OpenAI Configuration
+    # Custom LLM Farm Configuration
+    LLM_API_URL = os.getenv("LLM_API_URL")
+    LLM_API_KEY = os.getenv("LLM_API_KEY")
+    LLM_MODEL = os.getenv("LLM_MODEL", "meta-llama/Meta-Llama-3-70B-Instruct")
+    LLM_MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "2048"))
+    LLM_TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", "0.7"))
+    LLM_VERIFY_SSL = os.getenv("LLM_VERIFY_SSL", "true").lower() == "true"
+    
+    # Legacy OpenAI Configuration (kept for reference)
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
     OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
     OPENAI_TEMPERATURE = float(os.getenv("OPENAI_TEMPERATURE", "0.1"))
@@ -47,7 +56,8 @@ class Config:
             ("JIRA_SERVER_URL", cls.JIRA_SERVER_URL),
             ("JIRA_USERNAME", cls.JIRA_USERNAME),
             ("JIRA_API_TOKEN", cls.JIRA_API_TOKEN),
-            ("OPENAI_API_KEY", cls.OPENAI_API_KEY)
+            ("LLM_API_URL", cls.LLM_API_URL),
+            ("LLM_API_KEY", cls.LLM_API_KEY)
         ]
         
         missing = []
@@ -80,8 +90,11 @@ class Config:
             "app_title": cls.APP_TITLE,
             "app_description": cls.APP_DESCRIPTION,
             "debug_mode": cls.DEBUG,
-            "openai_model": cls.OPENAI_MODEL,
-            "openai_temperature": cls.OPENAI_TEMPERATURE,
+            "llm_model": cls.LLM_MODEL,
+            "llm_temperature": cls.LLM_TEMPERATURE,
+            "llm_verify_ssl": cls.LLM_VERIFY_SSL,
+            "openai_model": cls.OPENAI_MODEL,  # Legacy
+            "openai_temperature": cls.OPENAI_TEMPERATURE,  # Legacy
             "issue_limits": {
                 "default": cls.DEFAULT_ISSUE_LIMIT,
                 "analysis": cls.ANALYSIS_ISSUE_LIMIT,
