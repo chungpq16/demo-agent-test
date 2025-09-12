@@ -6,8 +6,11 @@ import os
 import pandas as pd
 from typing import List, Dict, Any, Optional
 from atlassian import Jira
+
 import logging
 from datetime import datetime
+from src.utils.debug_utils import debug_log
+from src.utils.config import config
 
 logger = logging.getLogger(__name__)
 
@@ -22,16 +25,22 @@ class JiraClient:
         self.username = os.getenv("JIRA_USERNAME")
         self.api_token = os.getenv("JIRA_API_TOKEN")
         self.project_key = os.getenv("JIRA_PROJECT_KEY")  # Optional project scoping
-        
+
+        # Print environment config at startup
+        debug_log(f"[ENV] Loaded config: {config.get_config_summary()}")
+        debug_log(f"[ENV] JIRA_SERVER_URL={self.server_url}")
+        debug_log(f"[ENV] JIRA_USERNAME={self.username}")
+        debug_log(f"[ENV] JIRA_PROJECT_KEY={self.project_key}")
+
         if not all([self.server_url, self.username, self.api_token]):
             raise ValueError("Missing required Jira credentials in environment variables")
-        
+
         self.jira = Jira(
             url=self.server_url,
             username=self.username,
             password=self.api_token
         )
-        
+
         # Log project scoping status
         if self.project_key:
             logger.info(f"Jira client initialized successfully with project scope: {self.project_key}")
@@ -50,20 +59,23 @@ class JiraClient:
         """
         if not self.project_key:
             logger.debug(f"No project scoping - returning original JQL: {base_jql}")
+            debug_log(f"[JQL] No project scoping - JQL: {base_jql}")
             return base_jql
-        
+
         # If base_jql is empty, just add project filter
         if not base_jql:
             result = f'project = "{self.project_key}"'
             logger.debug(f"Empty base JQL - project filter only: {result}")
+            debug_log(f"[JQL] Empty base JQL - project filter only: {result}")
             return result
-        
+
         # If base_jql only contains ORDER BY, add project filter before it
         if base_jql.strip().startswith("ORDER BY"):
             result = f'project = "{self.project_key}" {base_jql}'
             logger.debug(f"ORDER BY only - added project filter: {result}")
+            debug_log(f"[JQL] ORDER BY only - added project filter: {result}")
             return result
-        
+
         # If base_jql contains ORDER BY, separate conditions from ordering
         if "ORDER BY" in base_jql:
             parts = base_jql.split("ORDER BY", 1)
@@ -71,11 +83,13 @@ class JiraClient:
             ordering = f"ORDER BY {parts[1].strip()}"
             result = f'project = "{self.project_key}" AND ({conditions}) {ordering}'
             logger.debug(f"Complex JQL with ORDER BY - scoped: {base_jql} -> {result}")
+            debug_log(f"[JQL] Complex JQL with ORDER BY - scoped: {base_jql} -> {result}")
             return result
-        
+
         # If base_jql has only conditions (no ORDER BY), add project filter with AND
         result = f'project = "{self.project_key}" AND ({base_jql})'
         logger.debug(f"Simple conditions - scoped: {base_jql} -> {result}")
+        debug_log(f"[JQL] Simple conditions - scoped: {base_jql} -> {result}")
         return result
     
     def get_issues_by_status(self, status: str, limit: int = 100) -> pd.DataFrame:
@@ -91,23 +105,25 @@ class JiraClient:
         try:
             base_jql = f'status = "{status}" ORDER BY created DESC'
             jql = self._build_project_scoped_jql(base_jql)
+            debug_log(f"[JQL] get_issues_by_status JQL: {jql}")
+            debug_log(f"[Jira API] Endpoint: {self.server_url}/rest/api/2/search | Headers: (username: {self.username})")
             result = self.jira.jql(jql, limit=limit)
-            
+
             if not result.get('issues'):
                 project_info = f" in project {self.project_key}" if self.project_key else ""
                 logger.warning(f"No issues found with status: {status}{project_info}")
                 return pd.DataFrame()
-            
+
             issues_data = []
             for issue in result['issues']:
                 issue_data = self._extract_issue_data(issue)
                 issues_data.append(issue_data)
-            
+
             df = pd.DataFrame(issues_data)
             project_info = f" in project {self.project_key}" if self.project_key else ""
             logger.info(f"Retrieved {len(df)} issues with status: {status}{project_info}")
             return df
-            
+
         except Exception as e:
             logger.error(f"Error retrieving issues by status {status}: {e}")
             raise
@@ -125,23 +141,25 @@ class JiraClient:
         try:
             base_jql = "ORDER BY created DESC"
             jql = self._build_project_scoped_jql(base_jql)
+            debug_log(f"[JQL] get_all_issues JQL: {jql}")
+            debug_log(f"[Jira API] Endpoint: {self.server_url}/rest/api/2/search | Headers: (username: {self.username})")
             result = self.jira.jql(jql, limit=limit)
-            
+
             if not result.get('issues'):
                 project_info = f" in project {self.project_key}" if self.project_key else ""
                 logger.warning(f"No issues found{project_info}")
                 return pd.DataFrame()
-            
+
             issues_data = []
             for issue in result['issues']:
                 issue_data = self._extract_issue_data(issue)
                 issues_data.append(issue_data)
-            
+
             df = pd.DataFrame(issues_data)
             project_info = f" in project {self.project_key}" if self.project_key else ""
             logger.info(f"Retrieved {len(df)} total issues{project_info}")
             return df
-            
+
         except Exception as e:
             logger.error(f"Error retrieving all issues: {e}")
             raise
@@ -207,23 +225,25 @@ class JiraClient:
         try:
             # Apply project scoping to the provided JQL
             scoped_jql = self._build_project_scoped_jql(jql)
+            debug_log(f"[JQL] search_issues JQL: {scoped_jql}")
+            debug_log(f"[Jira API] Endpoint: {self.server_url}/rest/api/2/search | Headers: (username: {self.username})")
             result = self.jira.jql(scoped_jql, limit=limit)
-            
+
             if not result.get('issues'):
                 project_info = f" in project {self.project_key}" if self.project_key else ""
                 logger.warning(f"No issues found for JQL: {jql}{project_info}")
                 return pd.DataFrame()
-            
+
             issues_data = []
             for issue in result['issues']:
                 issue_data = self._extract_issue_data(issue)
                 issues_data.append(issue_data)
-            
+
             df = pd.DataFrame(issues_data)
             project_info = f" in project {self.project_key}" if self.project_key else ""
             logger.info(f"Found {len(df)} issues for JQL: {jql}{project_info}")
             return df
-            
+
         except Exception as e:
             logger.error(f"Error searching issues with JQL {jql}: {e}")
             raise

@@ -1,3 +1,9 @@
+def debug_log(message: str):
+    """Log debug messages if DEBUG is enabled."""
+    import os
+    debug = os.getenv("DEBUG", "false").lower() == "true"
+    if debug:
+        logging.debug(message)
 """
 Enhanced logging configuration with debug capabilities.
 """
