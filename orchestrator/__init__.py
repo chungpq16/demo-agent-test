@@ -24,6 +24,9 @@ class JiraOrchestrator:
         # Define available Jira functions for LLM
         self.jira_functions = self._define_jira_functions()
         
+        # Initialize current max results with environment default
+        self._current_max_results = int(os.getenv('JIRA_MAX_RESULTS', '50'))
+        
         logger.info("Jira Orchestrator initialized successfully")
     
     def _define_jira_functions(self) -> List[Dict]:
@@ -42,8 +45,7 @@ class JiraOrchestrator:
                     "properties": {
                         "max_results": {
                             "type": "integer",
-                            "description": "Maximum number of results to return",
-                            "default": 50
+                            "description": "Maximum number of results to return (will use configured limit if not specified)"
                         }
                     }
                 }
@@ -61,8 +63,7 @@ class JiraOrchestrator:
                         },
                         "max_results": {
                             "type": "integer",
-                            "description": "Maximum number of results to return",
-                            "default": 50
+                            "description": "Maximum number of results to return (will use configured limit if not specified)"
                         }
                     },
                     "required": ["status"]
@@ -94,8 +95,7 @@ class JiraOrchestrator:
                         },
                         "max_results": {
                             "type": "integer",
-                            "description": "Maximum number of results to return",
-                            "default": 50
+                            "description": "Maximum number of results to return (will use configured limit if not specified)"
                         }
                     },
                     "required": ["query"]
@@ -113,8 +113,7 @@ class JiraOrchestrator:
                         },
                         "max_results": {
                             "type": "integer",
-                            "description": "Maximum number of results to return",
-                            "default": 50
+                            "description": "Maximum number of results to return (will use configured limit if not specified)"
                         }
                     },
                     "required": ["label"]
@@ -133,8 +132,7 @@ class JiraOrchestrator:
                         },
                         "max_results": {
                             "type": "integer",
-                            "description": "Maximum number of results to return", 
-                            "default": 50
+                            "description": "Maximum number of results to return (will use configured limit if not specified)"
                         }
                     },
                     "required": ["severity"]
@@ -208,18 +206,26 @@ Examples:
 
 Always provide helpful, clear responses based on the Jira data returned."""
     
-    def process_request(self, user_input: str) -> str:
+    def process_request(self, user_input: str, max_results: int = None) -> str:
         """
         Process user request and orchestrate appropriate Jira operations.
         
         Args:
             user_input: User's natural language request
+            max_results: Maximum number of results to return (from UI config)
             
         Returns:
-            Response string with results
+            Response string with results or structured data
         """
         try:
             logger.debug(f"Processing user request: {user_input}")
+            
+            # Use provided max_results or fall back to environment default
+            if max_results is None:
+                max_results = int(os.getenv('JIRA_MAX_RESULTS', '50'))
+            
+            # Store max_results for use in function calls
+            self._current_max_results = max_results
             
             # Get completion with function calling
             system_prompt = self._get_system_prompt()
@@ -245,12 +251,42 @@ Always provide helpful, clear responses based on the Jira data returned."""
                     isinstance(function_result['data'][0], dict) and
                     'key' in function_result['data'][0]):  # This indicates Jira issues
                     
-                    # Generate summary and return structured data
-                    summary_prompt = f"Based on the following Jira issues data, provide a brief 2-3 sentence summary of what was found: {json.dumps(function_result['data'][:3], indent=2)}"
+                    # Generate summary based on ALL issues, not just first 3
+                    issues_data = function_result['data']
+                    
+                    # Create comprehensive summary data for all issues
+                    total_count = len(issues_data)
+                    status_counts = {}
+                    priority_counts = {}
+                    assignee_counts = {}
+                    
+                    for issue in issues_data:
+                        # Count by status
+                        status = issue.get('status', 'Unknown')
+                        status_counts[status] = status_counts.get(status, 0) + 1
+                        
+                        # Count by priority
+                        priority = issue.get('priority', 'Unknown')
+                        priority_counts[priority] = priority_counts.get(priority, 0) + 1
+                        
+                        # Count by assignee
+                        assignee = issue.get('assignee', 'Unassigned')
+                        assignee_counts[assignee] = assignee_counts.get(assignee, 0) + 1
+                    
+                    # Create summary with complete statistics
+                    summary_data = {
+                        'total_issues': total_count,
+                        'status_breakdown': status_counts,
+                        'priority_breakdown': priority_counts,
+                        'assignee_breakdown': assignee_counts,
+                        'recent_issues': issues_data[:5]  # Show first 5 as examples
+                    }
+                    
+                    summary_prompt = f"Based on the following complete Jira issues statistics, provide a comprehensive 2-3 sentence summary: {json.dumps(summary_data, indent=2)}"
                     
                     summary_response = self.llm_client.completion(
                         user_text=summary_prompt,
-                        system_prompt="You are a helpful assistant. Provide only a brief summary of the Jira issues found, focusing on count, types, and key insights. Keep it concise and professional."
+                        system_prompt="You are a helpful assistant. Provide a comprehensive summary of ALL the Jira issues found, including total count, status distribution, priority levels, and key insights. Be thorough and professional."
                     )
                     
                     # Return structured response for chat interface
@@ -298,7 +334,7 @@ Always provide helpful, clear responses based on the Jira data returned."""
         
         try:
             if function_name == "get_all_jira_issues":
-                max_results = function_args.get("max_results", 50)
+                max_results = function_args.get("max_results", self._current_max_results)
                 return {
                     "success": True,
                     "data": self.jira_client.get_all_issues(max_results=max_results)
@@ -306,7 +342,7 @@ Always provide helpful, clear responses based on the Jira data returned."""
             
             elif function_name == "get_jira_issues_by_status":
                 status = function_args["status"]
-                max_results = function_args.get("max_results", 50)
+                max_results = function_args.get("max_results", self._current_max_results)
                 return {
                     "success": True,
                     "data": self.jira_client.get_issues_by_status(status=status, max_results=max_results)
@@ -321,7 +357,7 @@ Always provide helpful, clear responses based on the Jira data returned."""
             
             elif function_name == "search_jira_issues":
                 query = function_args["query"]
-                max_results = function_args.get("max_results", 50)
+                max_results = function_args.get("max_results", self._current_max_results)
                 return {
                     "success": True,
                     "data": self.jira_client.search_issues(query=query, max_results=max_results)
@@ -329,7 +365,7 @@ Always provide helpful, clear responses based on the Jira data returned."""
             
             elif function_name == "get_jira_issues_by_label":
                 label = function_args["label"]
-                max_results = function_args.get("max_results", 50)
+                max_results = function_args.get("max_results", self._current_max_results)
                 # Create JQL query to search by label
                 project_key = os.getenv('JIRA_PROJECT', 'PROJECT')
                 jql_query = f"project = {project_key} AND labels = {label} ORDER BY created DESC"
@@ -340,7 +376,7 @@ Always provide helpful, clear responses based on the Jira data returned."""
             
             elif function_name == "get_jira_issues_by_severity":
                 severity = function_args["severity"]
-                max_results = function_args.get("max_results", 50)
+                max_results = function_args.get("max_results", self._current_max_results)
                 # Create JQL query to search by priority (severity)
                 project_key = os.getenv('JIRA_PROJECT', 'PROJECT')
                 jql_query = f"project = {project_key} AND priority = {severity} ORDER BY created DESC"

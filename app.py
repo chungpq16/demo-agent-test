@@ -132,6 +132,26 @@ class StreamlitJiraApp:
                         icon = "✅" if status['status'] == 'healthy' else "⚠️" if status['status'] == 'warning' else "❌"
                         st.write(f"{icon} **{component}**: {status['message']}")
             
+            # Application Configuration
+            st.subheader("⚙️ Application Configuration")
+            
+            # Jira Results Limit
+            default_limit = int(os.getenv('JIRA_MAX_RESULTS', '50'))
+            jira_limit = st.slider(
+                "📊 Jira Results Limit",
+                min_value=10,
+                max_value=200,
+                value=default_limit,
+                step=10,
+                help="Maximum number of issues to retrieve from Jira for all operations"
+            )
+            
+            # Store in session state for use across the app
+            st.session_state.jira_results_limit = jira_limit
+            
+            # Show current setting
+            st.caption(f"Current limit: {jira_limit} issues")
+            
             # Recent activity
             st.subheader("📈 Recent Activity")
             if 'chat_history' in st.session_state and st.session_state.chat_history:
@@ -196,8 +216,11 @@ class StreamlitJiraApp:
         # Show processing indicator
         with st.spinner('🤖 Processing your request...'):
             try:
-                # Process the query using orchestrator
-                response = self.orchestrator.process_request(user_input)
+                # Get the current limit from session state
+                max_results = st.session_state.get('jira_results_limit', 50)
+                
+                # Process the query using orchestrator with the configured limit
+                response = self.orchestrator.process_request(user_input, max_results=max_results)
                 
                 # Check if response is structured (Jira issues with table)
                 if isinstance(response, dict) and response.get('type') == 'jira_issues':
@@ -212,7 +235,7 @@ class StreamlitJiraApp:
                     })
                 
                 # Log the interaction
-                logger.info(f"💬 Chat interaction - User: {user_input[:100]}... | Response type: {'structured' if isinstance(response, dict) else 'text'}")
+                logger.info(f"💬 Chat interaction - User: {user_input[:100]}... | Response type: {'structured' if isinstance(response, dict) else 'text'} | Max results: {max_results}")
                 
             except Exception as e:
                 error_msg = f"😅 I encountered an error: {str(e)}\n\nPlease try rephrasing your request or check the system status."
