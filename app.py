@@ -96,7 +96,7 @@ class StreamlitJiraApp:
     def _render_navigation(self):
         """Render the top navigation."""
         # Navigation tabs
-        tab1, tab2 = st.tabs(["💬 Chat Assistant", "📊 Analytics Dashboard"])
+        tab1, tab2, tab3 = st.tabs(["💬 Chat Assistant", "📊 Analytics Dashboard", "📖 Instructions"])
         
         with tab1:
             st.session_state.current_page = 'Chat Assistant'
@@ -108,6 +108,11 @@ class StreamlitJiraApp:
             st.session_state.current_page = 'Analytics Dashboard'
             # Render analytics dashboard content
             render_analytics_dashboard()
+        
+        with tab3:
+            st.session_state.current_page = 'Instructions'
+            # Render instructions content
+            self._render_instructions()
     
     def _render_sidebar(self):
         """Render the sidebar with options and system status."""
@@ -292,6 +297,228 @@ class StreamlitJiraApp:
             )
         else:
             st.info("No issues found.")
+    
+    def _render_instructions(self):
+        """Render the instructions and help page."""
+        st.header("📖 GenAI Jira Assistant - User Guide")
+        st.markdown("---")
+        
+        # Introduction
+        st.subheader("🎯 Welcome to GenAI Jira Assistant")
+        st.markdown("""
+        This AI-powered assistant helps you interact with Jira using natural language. 
+        No need to remember complex JQL queries or navigate through multiple screens - 
+        just ask what you need in plain English!
+        """)
+        
+        # Chat Assistant Section
+        st.subheader("💬 Chat Assistant - How to Use")
+        st.markdown("---")
+        
+        # Basic queries section
+        with st.expander("📋 **1. Basic Jira Queries**", expanded=True):
+            st.markdown("""
+            **Get All Issues:**
+            - `"Show me all jira issues"`
+            - `"Get all issues"`
+            - `"List all project issues"`
+            - `"What issues do we have?"`
+            
+            **Get Issues by Status:**
+            - `"Show me all open issues"`
+            - `"Get completed tasks"`
+            - `"What's in progress?"`
+            - `"List closed issues"`
+            
+            **Get Issue Details:**
+            - `"Get details for PROJ-123"`
+            - `"Tell me about issue PROJ-456"`
+            - `"Show me information for ticket ABC-789"`
+            """)
+        
+        # Advanced queries section
+        with st.expander("🔍 **2. Advanced Filtering**", expanded=True):
+            st.markdown("""
+            **Filter by Priority/Severity:**
+            - `"Show high priority issues"`
+            - `"Find critical bugs"`
+            - `"Get low severity issues"`
+            - `"List blocker issues"`
+            
+            **Filter by Labels:**
+            - `"Find issues labeled '2025'"`
+            - `"Show issues with label 'bug'"`
+            - `"Get all 'frontend' labeled issues"`
+            - `"Issues with label 'urgent'"`
+            
+            **Content Search:**
+            - `"Find login problems"`
+            - `"Issues about authentication"`
+            - `"Search for database errors"`
+            - `"Find GenAI related issues"`
+            """)
+        
+        # Multi-criteria queries section  
+        with st.expander("🎯 **3. Multi-Criteria Queries (NEW!)**", expanded=True):
+            st.markdown("""
+            **Text + Status Combinations:**
+            - `"List all jira issues relate to GenAI and in Open Status"`
+            - `"Find authentication issues that are open"`
+            - `"Show login problems in progress"`
+            
+            **Priority + Status Combinations:**
+            - `"List all jira issues in critical priority and in TO-DO Status"`
+            - `"Show high priority open issues"`
+            - `"Find medium priority completed tasks"`
+            
+            **Label + Status Combinations:**
+            - `"List all jira issues with label 'Exam' and in Open Status"`
+            - `"Show bug labeled issues that are closed"`
+            - `"Get frontend issues that are in progress"`
+            """)
+        
+        # Tips and best practices
+        with st.expander("💡 **4. Tips & Best Practices**"):
+            st.markdown("""
+            **✅ Do's:**
+            - Use natural language - the AI understands context
+            - Be specific about what you want (status, priority, labels)
+            - Combine multiple criteria for precise filtering
+            - Use issue keys for specific details (e.g., PROJ-123)
+            
+            **❌ Don'ts:**
+            - Don't use complex JQL syntax (let the AI handle it)
+            - Don't worry about exact field names
+            - Don't use multiple queries when one combined query works
+            
+            **🎯 Pro Tips:**
+            - The AI learns from your language patterns
+            - Results are displayed as summary + interactive table
+            - Click URLs in the table to open issues in Jira
+            - Use the sidebar to control result limits (10-200 issues)
+            """)
+        
+        # Analytics Setup Section
+        st.subheader("📊 Analytics Dashboard - Setup Guide")
+        st.markdown("---")
+        
+        with st.expander("🔧 **1. Basic Setup**", expanded=True):
+            st.markdown("""
+            **Step 1: Configure Project**
+            - Ensure your `JIRA_PROJECT` environment variable is set
+            - This determines which project the analytics will analyze
+            
+            **Step 2: Choose Date Range**
+            - Select from predefined ranges: Last 7/30/90 days, Last 6 months
+            - Or use "Custom range" for specific dates
+            - Analytics will only include issues created within this timeframe
+            
+            **Step 3: Set Analysis Limit**
+            - Use the "Max Issues to Analyze" slider (10-200)
+            - Higher numbers = more comprehensive analysis but slower processing
+            - Recommended: 50-100 for most projects
+            """)
+        
+        with st.expander("🎯 **2. Advanced Filtering**", expanded=True):
+            st.markdown("""
+            **Status Filtering:**
+            - **"All Statuses"** (default): Analyzes issues in any status
+            - **Specific Status**: Focus on particular workflow stages
+            - Examples: "Open" for active work, "Done" for completed analysis
+            
+            **Priority Filtering:**
+            - **"All Priorities"** (default): Includes all priority levels
+            - **Specific Priority**: Focus on critical, high, medium, or low priority issues
+            - Useful for understanding priority distribution and bottlenecks
+            
+            **Combining Filters:**
+            - You can combine status + priority + date range
+            - Example: "Critical priority + Open status + Last 30 days"
+            - Creates focused analysis for specific scenarios
+            """)
+        
+        with st.expander("📈 **3. Understanding Analytics Results**"):
+            st.markdown("""
+            **Key Metrics Overview:**
+            - Total issues, completion rates, team performance indicators
+            - Color-coded metrics show health status
+            - Delta values indicate trends (↗️ improving, ↘️ declining)
+            
+            **Visualization Charts:**
+            - **Status Pie Chart**: Distribution of issues across statuses
+            - **Priority Bar Chart**: Volume of issues by priority level
+            - **Team Workload**: Assignee distribution and capacity
+            - **Sentiment Analysis**: AI-powered mood detection
+            
+            **AI Insights:**
+            - 🔍 **Patterns**: Automatically detected trends
+            - 💡 **Recommendations**: Actionable suggestions for improvement
+            - ⚠️ **Alerts**: Issues requiring immediate attention
+            
+            **Issues Data Table:**
+            - Reference table of all analyzed issues
+            - Sortable and filterable for detailed investigation
+            - Links directly to Jira for quick access
+            """)
+        
+        with st.expander("🚀 **4. Analytics Best Practices**"):
+            st.markdown("""
+            **For Project Managers:**
+            - Use date ranges that match your sprint/release cycles
+            - Filter by "Open" status to focus on current workload
+            - Monitor "Critical" and "High" priority distributions
+            
+            **For Team Leads:**
+            - Analyze team workload distribution regularly
+            - Use sentiment analysis to gauge team morale
+            - Track completion patterns over time
+            
+            **For Stakeholders:**
+            - Focus on broader date ranges (30-90 days)
+            - Use "All" filters for comprehensive project overview
+            - Pay attention to AI alerts and recommendations
+            
+            **Performance Optimization:**
+            - Start with smaller date ranges and issue limits
+            - Use specific filters to reduce processing time
+            - Save frequently used filter combinations as mental notes
+            """)
+        
+        # Configuration section
+        st.subheader("⚙️ Configuration & Setup")
+        st.markdown("---")
+        
+        with st.expander("🔑 **Environment Configuration**"):
+            st.markdown("""
+            **Required Environment Variables:**
+            ```
+            JIRA_URL=https://your-jira-instance.atlassian.net
+            JIRA_USERNAME=your-username  
+            JIRA_TOKEN=your-jira-api-token
+            JIRA_PROJECT=YOUR-PROJECT-KEY
+            JIRA_MAX_RESULTS=50
+            API_KEY=your-llm-farm-api-key
+            LLM_FARM_URL=your-llm-farm-endpoint
+            ```
+            
+            **How to Get Jira API Token:**
+            1. Go to Atlassian Account Settings
+            2. Navigate to Security → API tokens
+            3. Create token and copy it to `JIRA_TOKEN`
+            
+            **Finding Your Project Key:**
+            - Look at any issue URL: `https://yoursite.atlassian.net/browse/PROJ-123`
+            - "PROJ" is your project key
+            """)
+        
+        # Footer
+        st.markdown("---")
+        st.markdown("""
+        <div style='text-align: center; color: #666; font-style: italic;'>
+        🤖 GenAI Jira Assistant - Making Jira management simple and intelligent<br>
+        Need help? Ask the Chat Assistant: "How do I use this app?"
+        </div>
+        """, unsafe_allow_html=True)
     
     def _check_system_health(self) -> dict:
         """Check the health of all system components."""
