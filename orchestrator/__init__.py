@@ -370,9 +370,15 @@ If no more: "That's all the issues from this query"
             elif function_name == "get_jira_issues_by_status":
                 status = function_args["status"]
                 max_results = function_args.get("max_results", 50)
+                issues_data = self.jira_client.get_issues_by_status(status=status, max_results=max_results)
+                
+                # Cache the data for "show more" functionality
+                self.cached_issues = issues_data
+                self.cached_issues_type = f"status_{status}"
+                
                 return {
                     "success": True,
-                    "data": self.jira_client.get_issues_by_status(status=status, max_results=max_results)
+                    "data": issues_data
                 }
             
             elif function_name == "get_jira_issue_details":
@@ -385,9 +391,15 @@ If no more: "That's all the issues from this query"
             elif function_name == "search_jira_issues":
                 query = function_args["query"]
                 max_results = function_args.get("max_results", 50)
+                issues_data = self.jira_client.search_issues(query=query, max_results=max_results)
+                
+                # Cache the data for "show more" functionality
+                self.cached_issues = issues_data
+                self.cached_issues_type = f"search_{query[:20]}"
+                
                 return {
                     "success": True,
-                    "data": self.jira_client.search_issues(query=query, max_results=max_results)
+                    "data": issues_data
                 }
             
             elif function_name == "get_jira_issues_by_label":
@@ -396,9 +408,15 @@ If no more: "That's all the issues from this query"
                 # Create JQL query to search by label
                 project_key = os.getenv('JIRA_PROJECT', 'PROJECT')
                 jql_query = f"project = {project_key} AND labels = {label} ORDER BY created DESC"
+                issues_data = self.jira_client.search_issues(query=jql_query, max_results=max_results)
+                
+                # Cache the data for "show more" functionality
+                self.cached_issues = issues_data
+                self.cached_issues_type = f"label_{label}"
+                
                 return {
                     "success": True,
-                    "data": self.jira_client.search_issues(query=jql_query, max_results=max_results)
+                    "data": issues_data
                 }
             
             elif function_name == "get_jira_issues_by_severity":
@@ -407,24 +425,50 @@ If no more: "That's all the issues from this query"
                 # Create JQL query to search by priority (severity)
                 project_key = os.getenv('JIRA_PROJECT', 'PROJECT')
                 jql_query = f"project = {project_key} AND priority = {severity} ORDER BY created DESC"
+                issues_data = self.jira_client.search_issues(query=jql_query, max_results=max_results)
+                
+                # Cache the data for "show more" functionality
+                self.cached_issues = issues_data
+                self.cached_issues_type = f"severity_{severity}"
+                
                 return {
                     "success": True,
-                    "data": self.jira_client.search_issues(query=jql_query, max_results=max_results)
+                    "data": issues_data
                 }
             
             elif function_name == "show_more_issues":
                 start_index = function_args.get("start_index", 5)
                 batch_size = function_args.get("batch_size", 5)
                 
+                logger.debug(f"show_more_issues requested - start_index: {start_index}, batch_size: {batch_size}")
+                logger.debug(f"Cache status - has cached_issues: {self.cached_issues is not None}, cached_type: {self.cached_issues_type}")
+                
                 if not self.cached_issues:
                     return {
                         "success": False,
-                        "error": "No cached issues available. Please retrieve issues first."
+                        "error": "No cached issues available. Please retrieve issues first by asking for 'all issues', 'open issues', or any specific search.",
+                        "cache_status": {
+                            "has_cache": False,
+                            "cached_type": self.cached_issues_type
+                        }
+                    }
+                
+                if len(self.cached_issues) <= start_index:
+                    return {
+                        "success": False,
+                        "error": f"No more issues to show. Total cached issues: {len(self.cached_issues)}, requested start: {start_index}",
+                        "cache_status": {
+                            "total_cached": len(self.cached_issues),
+                            "requested_start": start_index,
+                            "cached_type": self.cached_issues_type
+                        }
                     }
                 
                 end_index = start_index + batch_size
                 batch_issues = self.cached_issues[start_index:end_index]
                 has_more = end_index < len(self.cached_issues)
+                
+                logger.info(f"Returning batch of {len(batch_issues)} issues from cache ({start_index+1}-{min(end_index, len(self.cached_issues))} of {len(self.cached_issues)})")
                 
                 return {
                     "success": True,
@@ -434,7 +478,8 @@ If no more: "That's all the issues from this query"
                         "end_index": min(end_index, len(self.cached_issues)),
                         "total_cached": len(self.cached_issues),
                         "has_more": has_more,
-                        "cached_type": self.cached_issues_type
+                        "cached_type": self.cached_issues_type,
+                        "batch_size": len(batch_issues)
                     }
                 }
             
