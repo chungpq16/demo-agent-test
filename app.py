@@ -7,7 +7,6 @@ import os
 import sys
 import pandas as pd
 import json
-import asyncio
 from datetime import datetime
 import time
 import traceback
@@ -242,7 +241,7 @@ class StreamlitJiraApp:
         with st.spinner('🤖 Processing your request...'):
             try:
                 # Process the query using orchestrator
-                response = asyncio.run(self.orchestrator.process_query(user_input))
+                response = self.orchestrator.process_request(user_input)
                 
                 # Add assistant response to history
                 st.session_state.chat_history.append({

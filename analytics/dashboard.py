@@ -5,12 +5,11 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 from typing import Dict, Any, List
-import asyncio
 from datetime import datetime, timedelta
 
 from analytics import JiraAnalyticsEngine
 from analytics.visualizer import AnalyticsVisualizer
-from orchestrator import JiraOrchestrator
+from jira_client import JiraClient
 from logger import get_logger
 
 logger = get_logger()
@@ -23,7 +22,7 @@ class AnalyticsDashboard:
         """Initialize the dashboard."""
         self.analytics_engine = JiraAnalyticsEngine()
         self.visualizer = AnalyticsVisualizer()
-        self.orchestrator = JiraOrchestrator()
+        self.jira_client = JiraClient()
         logger.info("📊 Analytics Dashboard initialized")
     
     def render_dashboard(self):
@@ -150,13 +149,8 @@ class AnalyticsDashboard:
                 
                 logger.info(f"🔍 Loading analytics with JQL: {jql}")
                 
-                # Get issues from Jira using orchestrator
-                result = asyncio.run(self.orchestrator.process_query(
-                    f"Search for issues with JQL: {jql}. Limit results to {max_results}."
-                ))
-                
-                # Extract issues from result
-                issues = self._extract_issues_from_result(result)
+                # Get issues from Jira using the client directly
+                issues = self.jira_client.search_issues(jql, max_results=max_results)
                 
                 if not issues:
                     st.error("❌ No issues found with the specified criteria.")
@@ -184,24 +178,6 @@ class AnalyticsDashboard:
             except Exception as e:
                 logger.error(f"❌ Error loading analytics: {str(e)}")
                 st.error(f"❌ Error loading analytics: {str(e)}")
-    
-    def _extract_issues_from_result(self, result: str) -> List[Dict]:
-        """Extract issues from orchestrator result."""
-        try:
-            # The result is likely a formatted string, we need to parse it
-            # This is a simplified extraction - in a real scenario, we'd have 
-            # a more structured way to get the raw issue data
-            
-            # For now, let's use the orchestrator to get raw issue data
-            # This is a placeholder - you might need to modify the orchestrator
-            # to return structured data instead of formatted strings
-            
-            # Temporary solution: return empty list and show a message
-            return []
-            
-        except Exception as e:
-            logger.error(f"❌ Error extracting issues: {str(e)}")
-            return []
     
     def _render_summary_cards(self, analytics_data: Dict[str, Any]):
         """Render summary metric cards."""
