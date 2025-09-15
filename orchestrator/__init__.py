@@ -24,10 +24,6 @@ class JiraOrchestrator:
         # Define available Jira functions for LLM
         self.jira_functions = self._define_jira_functions()
         
-        # Cache for storing retrieved issues to avoid repeated API calls
-        self.cached_issues = None
-        self.cached_issues_type = None  # Track what type of issues are cached
-        
         logger.info("Jira Orchestrator initialized successfully")
     
     def _define_jira_functions(self) -> List[Dict]:
@@ -125,25 +121,6 @@ class JiraOrchestrator:
                 }
             },
             {
-                "name": "show_more_issues",
-                "description": "Show more issues from the previously retrieved data without calling Jira API again",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "start_index": {
-                            "type": "integer",
-                            "description": "Starting index for the next batch of issues",
-                            "default": 5
-                        },
-                        "batch_size": {
-                            "type": "integer", 
-                            "description": "Number of issues to show in this batch",
-                            "default": 5
-                        }
-                    }
-                }
-            },
-            {
                 "name": "get_jira_issues_by_severity",
                 "description": "Get Jira issues filtered by severity/priority",
                 "parameters": {
@@ -181,17 +158,12 @@ You have access to the following Jira operations:
 4. search_jira_issues: Search issues using text or JQL queries (for general content search)
 5. get_jira_issues_by_label: Get issues filtered by SPECIFIC label names (when user mentions exact label)
 6. get_jira_issues_by_severity: Get issues filtered by severity/priority (Critical, High, Medium, Low, etc.)
-7. show_more_issues: Show more issues from previously retrieved data (when user asks for "show more", "next", "more issues")
 
 **CRITICAL DECISION RULES:**
 
 🗂️ **Use get_all_jira_issues when:**
 - User wants ALL issues from the project without any filtering
 - Examples: "Show me all jira issues", "Get all issues", "List all project issues", "What issues do we have?"
-
-🔄 **Use show_more_issues when:**
-- User asks to see more issues after initial results were shown
-- Examples: "show more", "show more issues", "next", "more", "show remaining issues"
 
 🏷️ **Use get_jira_issues_by_label when:**
 - User asks for issues with a SPECIFIC label name or mentions "labeled" "label"
@@ -226,7 +198,6 @@ Examples:
 - "Show me all jira issues" → get_all_jira_issues
 - "Get all issues" → get_all_jira_issues
 - "List all project issues" → get_all_jira_issues
-- "Show more" or "more issues" → show_more_issues
 - "Show me all open issues" → get_jira_issues_by_status with status="Open"
 - "Get details for PROJ-123" → get_jira_issue_details with issue_key="PROJ-123"
 - "Find issues labeled '2025'" → get_jira_issues_by_label with label="2025"
@@ -266,56 +237,8 @@ Always provide helpful, clear responses based on the Jira data returned."""
             if hasattr(message, 'function_call') and message.function_call:
                 function_result = self._execute_function_call(message.function_call)
                 
-                # Special handling for get_all_jira_issues with categorized summary
-                if (hasattr(message.function_call, 'name') and 
-                    message.function_call.name == 'get_all_jira_issues' and 
-                    function_result.get('success') and 
-                    'summary' in function_result):
-                    
-                    summary = function_result['summary']
-                    follow_up_prompt = f"""Based on the following Jira issues analysis, provide a clear, simple summary:
-
-ANALYSIS DATA:
-- Total Issues: {summary['total_issues']}
-- Status Breakdown: {summary['status_breakdown']}
-- Displayed Issues: {summary['displayed_issues']}
-- Has More: {summary['has_more']}
-- Remaining Count: {summary.get('remaining_count', 0)}
-
-Please format this as:
-1. 📊 Total count: "Found X issues total"
-2. 📋 Status breakdown with emojis (✅ Done, � In Progress, 🆕 Open, etc.)
-3. Show the displayed issues (title, key, status, assignee)
-4. If has_more is True, mention "Say 'show more' to see the remaining X issues"
-
-Keep it clean and simple - just overview + status + first batch + show more option."""
-                
-                # Special handling for show_more_issues
-                elif (hasattr(message.function_call, 'name') and 
-                      message.function_call.name == 'show_more_issues' and 
-                      function_result.get('success')):
-                    
-                    batch_info = function_result.get('batch_info', {})
-                    follow_up_prompt = f"""Show the next batch of issues:
-
-BATCH DATA:
-- Issues: {function_result['data']}
-- Showing: {batch_info.get('start_index', 0) + 1} to {batch_info.get('end_index', 0)}
-- Total Available: {batch_info.get('total_cached', 0)}
-- Has More: {batch_info.get('has_more', False)}
-- Source: {batch_info.get('cached_type', 'unknown')}
-
-Format as:
-📋 Showing issues X-Y of Z:
-[List the issues with key, title, status, assignee]
-
-If has more: "Say 'show more' to see additional issues"
-If no more: "That's all the issues from this query"
-"""
-                
-                else:
-                    # Standard function result handling
-                    follow_up_prompt = f"The function returned: {json.dumps(function_result, indent=2)}\n\nPlease provide a clear, human-readable summary of this information for the user."
+                # Get final response from LLM with function results
+                follow_up_prompt = f"The function returned: {json.dumps(function_result, indent=2)}\n\nPlease provide a clear, human-readable summary of this information for the user."
                 
                 final_response = self.llm_client.completion(
                     user_text=follow_up_prompt,
@@ -352,33 +275,17 @@ If no more: "That's all the issues from this query"
         try:
             if function_name == "get_all_jira_issues":
                 max_results = function_args.get("max_results", 50)
-                issues_data = self.jira_client.get_all_issues(max_results=max_results)
-                
-                # Cache the data for "show more" functionality
-                self.cached_issues = issues_data
-                self.cached_issues_type = "all_issues"
-                
-                # Generate simplified summary
-                categorized_summary = self._generate_categorized_summary(issues_data)
-                
                 return {
                     "success": True,
-                    "data": issues_data,
-                    "summary": categorized_summary
+                    "data": self.jira_client.get_all_issues(max_results=max_results)
                 }
             
             elif function_name == "get_jira_issues_by_status":
                 status = function_args["status"]
                 max_results = function_args.get("max_results", 50)
-                issues_data = self.jira_client.get_issues_by_status(status=status, max_results=max_results)
-                
-                # Cache the data for "show more" functionality
-                self.cached_issues = issues_data
-                self.cached_issues_type = f"status_{status}"
-                
                 return {
                     "success": True,
-                    "data": issues_data
+                    "data": self.jira_client.get_issues_by_status(status=status, max_results=max_results)
                 }
             
             elif function_name == "get_jira_issue_details":
@@ -391,15 +298,9 @@ If no more: "That's all the issues from this query"
             elif function_name == "search_jira_issues":
                 query = function_args["query"]
                 max_results = function_args.get("max_results", 50)
-                issues_data = self.jira_client.search_issues(query=query, max_results=max_results)
-                
-                # Cache the data for "show more" functionality
-                self.cached_issues = issues_data
-                self.cached_issues_type = f"search_{query[:20]}"
-                
                 return {
                     "success": True,
-                    "data": issues_data
+                    "data": self.jira_client.search_issues(query=query, max_results=max_results)
                 }
             
             elif function_name == "get_jira_issues_by_label":
@@ -408,15 +309,9 @@ If no more: "That's all the issues from this query"
                 # Create JQL query to search by label
                 project_key = os.getenv('JIRA_PROJECT', 'PROJECT')
                 jql_query = f"project = {project_key} AND labels = {label} ORDER BY created DESC"
-                issues_data = self.jira_client.search_issues(query=jql_query, max_results=max_results)
-                
-                # Cache the data for "show more" functionality
-                self.cached_issues = issues_data
-                self.cached_issues_type = f"label_{label}"
-                
                 return {
                     "success": True,
-                    "data": issues_data
+                    "data": self.jira_client.search_issues(query=jql_query, max_results=max_results)
                 }
             
             elif function_name == "get_jira_issues_by_severity":
@@ -425,65 +320,17 @@ If no more: "That's all the issues from this query"
                 # Create JQL query to search by priority (severity)
                 project_key = os.getenv('JIRA_PROJECT', 'PROJECT')
                 jql_query = f"project = {project_key} AND priority = {severity} ORDER BY created DESC"
-                issues_data = self.jira_client.search_issues(query=jql_query, max_results=max_results)
-                
-                # Cache the data for "show more" functionality
-                self.cached_issues = issues_data
-                self.cached_issues_type = f"severity_{severity}"
-                
                 return {
                     "success": True,
-                    "data": issues_data
+                    "data": self.jira_client.search_issues(query=jql_query, max_results=max_results)
                 }
             
-            elif function_name == "show_more_issues":
-                start_index = function_args.get("start_index", 5)
-                batch_size = function_args.get("batch_size", 5)
-                
-                logger.debug(f"show_more_issues requested - start_index: {start_index}, batch_size: {batch_size}")
-                logger.debug(f"Cache status - has cached_issues: {self.cached_issues is not None}, cached_type: {self.cached_issues_type}")
-                
-                if not self.cached_issues:
-                    return {
-                        "success": False,
-                        "error": "No cached issues available. Please retrieve issues first by asking for 'all issues', 'open issues', or any specific search.",
-                        "cache_status": {
-                            "has_cache": False,
-                            "cached_type": self.cached_issues_type
-                        }
-                    }
-                
-                if len(self.cached_issues) <= start_index:
-                    return {
-                        "success": False,
-                        "error": f"No more issues to show. Total cached issues: {len(self.cached_issues)}, requested start: {start_index}",
-                        "cache_status": {
-                            "total_cached": len(self.cached_issues),
-                            "requested_start": start_index,
-                            "cached_type": self.cached_issues_type
-                        }
-                    }
-                
-                end_index = start_index + batch_size
-                batch_issues = self.cached_issues[start_index:end_index]
-                has_more = end_index < len(self.cached_issues)
-                
-                logger.info(f"Returning batch of {len(batch_issues)} issues from cache ({start_index+1}-{min(end_index, len(self.cached_issues))} of {len(self.cached_issues)})")
-                
-                return {
-                    "success": True,
-                    "data": batch_issues,
-                    "batch_info": {
-                        "start_index": start_index,
-                        "end_index": min(end_index, len(self.cached_issues)),
-                        "total_cached": len(self.cached_issues),
-                        "has_more": has_more,
-                        "cached_type": self.cached_issues_type,
-                        "batch_size": len(batch_issues)
-                    }
-                }
             
             else:
+                return {
+                    "success": False,
+                    "error": f"Unknown function: {function_name}"
+                }
                 return {
                     "success": False,
                     "error": f"Unknown function: {function_name}"
@@ -495,44 +342,6 @@ If no more: "That's all the issues from this query"
                 "success": False,
                 "error": str(e)
             }
-    
-    def _generate_categorized_summary(self, issues_data: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """
-        Generate simple categorized summary with status breakdown only.
-        
-        Args:
-            issues_data: List of formatted issue data
-            
-        Returns:
-            Dictionary containing simplified summary
-        """
-        if not issues_data:
-            return {
-                "total_issues": 0,
-                "status_breakdown": {},
-                "displayed_issues": [],
-                "has_more": False
-            }
-        
-        # Count by status only
-        status_counts = {}
-        for issue in issues_data:
-            status = issue.get('status', 'Unknown')
-            status_counts[status] = status_counts.get(status, 0) + 1
-        
-        # Show first 5 issues
-        displayed_issues = issues_data[:5]
-        has_more = len(issues_data) > 5
-        
-        summary = {
-            "total_issues": len(issues_data),
-            "status_breakdown": dict(sorted(status_counts.items(), key=lambda x: x[1], reverse=True)),
-            "displayed_issues": displayed_issues,
-            "has_more": has_more,
-            "remaining_count": len(issues_data) - 5 if has_more else 0
-        }
-        
-        return summary
     
     def health_check(self) -> Dict[str, bool]:
         """
