@@ -237,7 +237,31 @@ Always provide helpful, clear responses based on the Jira data returned."""
             if hasattr(message, 'function_call') and message.function_call:
                 function_result = self._execute_function_call(message.function_call)
                 
-                # Get final response from LLM with function results
+                # Check if the result contains Jira issues data
+                if (function_result.get('success') and 
+                    'data' in function_result and 
+                    isinstance(function_result['data'], list) and 
+                    len(function_result['data']) > 0 and 
+                    isinstance(function_result['data'][0], dict) and
+                    'key' in function_result['data'][0]):  # This indicates Jira issues
+                    
+                    # Generate summary and return structured data
+                    summary_prompt = f"Based on the following Jira issues data, provide a brief 2-3 sentence summary of what was found: {json.dumps(function_result['data'][:3], indent=2)}"
+                    
+                    summary_response = self.llm_client.completion(
+                        user_text=summary_prompt,
+                        system_prompt="You are a helpful assistant. Provide only a brief summary of the Jira issues found, focusing on count, types, and key insights. Keep it concise and professional."
+                    )
+                    
+                    # Return structured response for chat interface
+                    logger.info("Request processed successfully with structured Jira issues response")
+                    return {
+                        'type': 'jira_issues',
+                        'summary': summary_response.strip(),
+                        'issues': function_result['data']
+                    }
+                
+                # Standard function result handling for non-issues responses
                 follow_up_prompt = f"The function returned: {json.dumps(function_result, indent=2)}\n\nPlease provide a clear, human-readable summary of this information for the user."
                 
                 final_response = self.llm_client.completion(

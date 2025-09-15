@@ -171,7 +171,11 @@ class StreamlitJiraApp:
                         st.caption(f"⏰ {message['timestamp'].strftime('%H:%M:%S')}")
                 else:
                     with st.chat_message("assistant"):
-                        st.write(message['content'])
+                        # Check if it's a structured Jira issues message
+                        if message.get('type') == 'jira_issues':
+                            self._render_jira_issues_message(message)
+                        else:
+                            st.write(message['content'])
                         st.caption(f"🤖 {message['timestamp'].strftime('%H:%M:%S')}")
         
         # Chat input
@@ -195,15 +199,20 @@ class StreamlitJiraApp:
                 # Process the query using orchestrator
                 response = self.orchestrator.process_request(user_input)
                 
-                # Add assistant response to history
-                st.session_state.chat_history.append({
-                    'role': 'assistant',
-                    'content': response,
-                    'timestamp': datetime.now()
-                })
+                # Check if response is structured (Jira issues with table)
+                if isinstance(response, dict) and response.get('type') == 'jira_issues':
+                    # Handle structured Jira issues response
+                    self._add_jira_issues_response(response)
+                else:
+                    # Handle regular text response
+                    st.session_state.chat_history.append({
+                        'role': 'assistant',
+                        'content': response,
+                        'timestamp': datetime.now()
+                    })
                 
                 # Log the interaction
-                logger.info(f"💬 Chat interaction - User: {user_input[:100]}... | Response length: {len(response)} chars")
+                logger.info(f"💬 Chat interaction - User: {user_input[:100]}... | Response type: {'structured' if isinstance(response, dict) else 'text'}")
                 
             except Exception as e:
                 error_msg = f"😅 I encountered an error: {str(e)}\n\nPlease try rephrasing your request or check the system status."
@@ -216,6 +225,61 @@ class StreamlitJiraApp:
         
         # Rerun to show the new messages
         st.rerun()
+    
+    def _add_jira_issues_response(self, response_data):
+        """Add a structured Jira issues response to chat history."""
+        st.session_state.chat_history.append({
+            'role': 'assistant',
+            'type': 'jira_issues',
+            'summary': response_data['summary'],
+            'issues': response_data['issues'],
+            'timestamp': datetime.now()
+        })
+    
+    def _render_jira_issues_message(self, message):
+        """Render a Jira issues message with summary + table."""
+        # Display summary
+        st.write(message['summary'])
+        
+        # Display issues table
+        if message['issues']:
+            # Convert issues to DataFrame for table display
+            df_data = []
+            for issue in message['issues']:
+                df_data.append({
+                    'Jira ID': issue.get('key', 'N/A'),
+                    'Title': issue.get('summary', 'N/A'),
+                    'Status': issue.get('status', 'N/A'),
+                    'Priority': issue.get('priority', 'N/A'),
+                    'Assignee': issue.get('assignee', 'Unassigned'),
+                    'Reporter': issue.get('reporter', 'N/A'),
+                    'URL': issue.get('url', 'N/A')
+                })
+            
+            df = pd.DataFrame(df_data)
+            
+            # Display table with clickable URLs
+            st.dataframe(
+                df,
+                use_container_width=True,
+                column_config={
+                    "URL": st.column_config.LinkColumn(
+                        "URL",
+                        help="Click to open issue in Jira",
+                        display_text="Open Issue"
+                    ),
+                    "Jira ID": st.column_config.Column(
+                        "Jira ID",
+                        width="small"
+                    ),
+                    "Title": st.column_config.Column(
+                        "Title", 
+                        width="large"
+                    )
+                }
+            )
+        else:
+            st.info("No issues found.")
     
     def _check_system_health(self) -> dict:
         """Check the health of all system components."""
