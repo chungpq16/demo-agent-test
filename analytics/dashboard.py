@@ -39,6 +39,21 @@ class AnalyticsDashboard:
             st.info("👆 Configure your analytics settings in the sidebar and click 'Load Analytics' to begin!")
             return
         
+        # Show applied filters if available
+        if 'applied_filters' in st.session_state:
+            filters = st.session_state.applied_filters
+            filter_info = []
+            
+            if filters.get('status'):
+                filter_info.append(f"**Status**: {filters['status']}")
+            if filters.get('priority'): 
+                filter_info.append(f"**Priority**: {filters['priority']}")
+            if filters.get('date_range'):
+                filter_info.append(f"**Date Range**: {filters['date_range']}")
+            
+            if filter_info:
+                st.info(f"📊 **Active Filters**: {' | '.join(filter_info)}")
+        
         # Main dashboard content
         analytics_data = st.session_state.analytics_data
         
@@ -98,6 +113,15 @@ class AnalyticsDashboard:
             # Max results
             max_results = st.slider("Max Issues to Analyze", 10, 200, 50)
             
+            # Status filter
+            st.subheader("🎯 Filters")
+            status_options = ["All Statuses", "Open", "In Progress", "Done", "Closed", "Resolved", "TO-DO", "To Do"]
+            selected_status = st.selectbox("Status", status_options, index=0)
+            
+            # Priority filter
+            priority_options = ["All Priorities", "Critical", "High", "Medium", "Low", "Blocker", "Major", "Minor", "Trivial"]
+            selected_priority = st.selectbox("Priority", priority_options, index=0)
+            
             # Load analytics button
             if st.button("🔄 Load Analytics", type="primary"):
                 self._load_analytics_data(
@@ -105,24 +129,21 @@ class AnalyticsDashboard:
                     start_date=start_date,
                     end_date=end_date,
                     max_results=max_results,
+                    status_filter=selected_status if selected_status != "All Statuses" else None,
+                    priority_filter=selected_priority if selected_priority != "All Priorities" else None,
                     enable_sentiment=True,
                     enable_predictions=True,
                     enable_bottlenecks=True
                 )
-            
-            # Auto-refresh option
-            st.subheader("🔄 Auto Refresh")
-            auto_refresh = st.checkbox("Enable auto-refresh (5 min)")
-            if auto_refresh:
-                st.rerun()  # This will cause the app to refresh periodically
         
         # Store project key in session state (from environment)
         st.session_state.project_key = project_key
     
     def _load_analytics_data(self, project_key=None, start_date=None, end_date=None, 
-                           max_results=50, enable_sentiment=True, enable_predictions=True, 
+                           max_results=50, status_filter=None, priority_filter=None,
+                           enable_sentiment=True, enable_predictions=True, 
                            enable_bottlenecks=True):
-        """Load analytics data from Jira."""
+        """Load analytics data from Jira with filters."""
         with st.spinner("🔍 Fetching Jira data and running analytics..."):
             try:
                 # Build JQL query
@@ -137,11 +158,27 @@ class AnalyticsDashboard:
                 if end_date:
                     jql_parts.append(f"created <= '{end_date.strftime('%Y-%m-%d')}'")
                 
+                # Add status filter if specified
+                if status_filter:
+                    # Handle status name variations
+                    status_mapping = {
+                        'to-do': 'TO-DO',
+                        'todo': 'TO-DO',
+                        'to do': 'To Do'
+                    }
+                    normalized_status = status_mapping.get(status_filter.lower(), status_filter)
+                    jql_parts.append(f"status = '{normalized_status}'")
+                
+                # Add priority filter if specified
+                if priority_filter:
+                    jql_parts.append(f"priority = {priority_filter}")
+                
                 # Default to recent issues if no project specified
                 if not jql_parts:
                     jql_parts.append("created >= -30d")
                 
                 jql = " AND ".join(jql_parts)
+                jql += " ORDER BY created DESC"
                 
                 logger.info(f"🔍 Loading analytics with JQL: {jql}")
                 
@@ -168,8 +205,13 @@ class AnalyticsDashboard:
                 st.session_state.raw_issues = issues  # Store raw issues for table display
                 st.session_state.issues_analyzed = len(issues)
                 st.session_state.last_updated = datetime.now()
+                st.session_state.applied_filters = {
+                    'status': status_filter,
+                    'priority': priority_filter,
+                    'date_range': f"{start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}" if start_date and end_date else None
+                }
                 
-                logger.info(f"✅ Analytics completed for {len(issues)} issues")
+                logger.info(f"✅ Analytics completed for {len(issues)} issues with filters - Status: {status_filter}, Priority: {priority_filter}")
                 st.rerun()  # Refresh to show the results
                 
             except Exception as e:

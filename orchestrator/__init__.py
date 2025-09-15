@@ -137,6 +137,76 @@ class JiraOrchestrator:
                     },
                     "required": ["severity"]
                 }
+            },
+            {
+                "name": "get_jira_issues_by_text_and_status",
+                "description": "Get Jira issues that contain specific text/keywords in title or description AND have a specific status",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "text_query": {
+                            "type": "string",
+                            "description": "Text to search for in issue title or description (e.g., 'GenAI', 'authentication', 'login')"
+                        },
+                        "status": {
+                            "type": "string",
+                            "description": "Status to filter by",
+                            "enum": ["Open", "In Progress", "Done", "Closed", "Resolved", "TO-DO", "To Do"]
+                        },
+                        "max_results": {
+                            "type": "integer",
+                            "description": "Maximum number of results to return (will use configured limit if not specified)"
+                        }
+                    },
+                    "required": ["text_query", "status"]
+                }
+            },
+            {
+                "name": "get_jira_issues_by_priority_and_status",
+                "description": "Get Jira issues filtered by both priority/severity AND status",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "priority": {
+                            "type": "string",
+                            "description": "Priority/severity to filter by",
+                            "enum": ["Critical", "High", "Medium", "Low", "Blocker", "Major", "Minor", "Trivial"]
+                        },
+                        "status": {
+                            "type": "string",
+                            "description": "Status to filter by",
+                            "enum": ["Open", "In Progress", "Done", "Closed", "Resolved", "TO-DO", "To Do"]
+                        },
+                        "max_results": {
+                            "type": "integer",
+                            "description": "Maximum number of results to return (will use configured limit if not specified)"
+                        }
+                    },
+                    "required": ["priority", "status"]
+                }
+            },
+            {
+                "name": "get_jira_issues_by_label_and_status",
+                "description": "Get Jira issues filtered by both label AND status",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "label": {
+                            "type": "string",
+                            "description": "Label to filter by (e.g., 'Exam', 'frontend', 'backend', 'bug')"
+                        },
+                        "status": {
+                            "type": "string",
+                            "description": "Status to filter by",
+                            "enum": ["Open", "In Progress", "Done", "Closed", "Resolved", "TO-DO", "To Do"]
+                        },
+                        "max_results": {
+                            "type": "integer",
+                            "description": "Maximum number of results to return (will use configured limit if not specified)"
+                        }
+                    },
+                    "required": ["label", "status"]
+                }
             }
         ]
     
@@ -156,6 +226,9 @@ You have access to the following Jira operations:
 4. search_jira_issues: Search issues using text or JQL queries (for general content search)
 5. get_jira_issues_by_label: Get issues filtered by SPECIFIC label names (when user mentions exact label)
 6. get_jira_issues_by_severity: Get issues filtered by severity/priority (Critical, High, Medium, Low, etc.)
+7. get_jira_issues_by_text_and_status: Get issues containing specific text AND having specific status
+8. get_jira_issues_by_priority_and_status: Get issues with specific priority AND status
+9. get_jira_issues_by_label_and_status: Get issues with specific label AND status
 
 **CRITICAL DECISION RULES:**
 
@@ -164,45 +237,57 @@ You have access to the following Jira operations:
 - Examples: "Show me all jira issues", "Get all issues", "List all project issues", "What issues do we have?"
 
 🏷️ **Use get_jira_issues_by_label when:**
-- User asks for issues with a SPECIFIC label name or mentions "labeled" "label"
+- User asks for issues with a SPECIFIC label name or mentions "labeled" "label" (single filter only)
 - Examples: "Find issues labeled '2025'", "Show issues with label 'bug'", "Get all '2024' labeled issues"
 
 ⚡ **Use get_jira_issues_by_severity when:**
-- User asks for issues with specific priority/severity levels
+- User asks for issues with specific priority/severity levels (single filter only)
 - Examples: "Show high priority issues", "Find critical bugs", "Get low severity issues"
 
 📋 **Use get_jira_issues_by_status when:**
-- User asks for issues by workflow status
+- User asks for issues by workflow status (single filter only)
 - Examples: "Show open issues", "Get completed tasks", "What's in progress?"
 
 🔍 **Use search_jira_issues ONLY when:**
 - User asks for general content search or mentions topics/keywords (NOT labels or severity)
-- User wants to search within issue content (summary/description)
+- User wants to search within issue content (summary/description) with simple text
 - Examples: "Find login problems", "Issues about authentication", "Search for database errors"
+
+🎯 **Use COMBINATION functions for multi-criteria queries:**
+
+📝 **Use get_jira_issues_by_text_and_status when:**
+- User wants issues containing specific text/keywords AND having specific status
+- Examples: "List all jira issues relate to GenAI and in Open Status", "Find authentication issues that are open"
+
+⚡📋 **Use get_jira_issues_by_priority_and_status when:**
+- User wants issues with specific priority AND status
+- Examples: "List all jira issues in critical priority and in TO-DO Status", "Show high priority open issues"
+
+🏷️📋 **Use get_jira_issues_by_label_and_status when:**
+- User wants issues with specific label AND status  
+- Examples: "List all jira issues with label 'Exam' and in Open Status", "Show bug labeled issues that are closed"
 
 💬 **For general questions, provide direct helpful responses without function calls:**
 - Questions about Jira concepts, workflow advice, best practices
 - "How do I create an issue?", "What's the difference between bug and story?"
 
-**IMPORTANT: DO NOT use search_jira_issues for:**
-- Getting all issues (use get_all_jira_issues)
-- Label searches (use get_jira_issues_by_label)
-- Severity searches (use get_jira_issues_by_severity)
+**IMPORTANT: Choose the RIGHT function based on the query complexity:**
+- Single filter → Use specific single-filter function
+- Multiple filters → Use appropriate combination function
+- General text search → Use search_jira_issues (NOT for labels or priority)
 
 When a user asks about Jira issues, analyze their request carefully and call the appropriate function.
 After getting the results, provide a clear, human-readable summary of the information.
 
 Examples:
 - "Show me all jira issues" → get_all_jira_issues
-- "Get all issues" → get_all_jira_issues
-- "List all project issues" → get_all_jira_issues
+- "List all jira issues relate to GenAI and in Open Status" → get_jira_issues_by_text_and_status with text_query="GenAI" and status="Open"
+- "List all jira issues in critical priority and in TO-DO Status" → get_jira_issues_by_priority_and_status with priority="Critical" and status="TO-DO"
+- "List all jira issues with label 'Exam' and in Open Status" → get_jira_issues_by_label_and_status with label="Exam" and status="Open"
 - "Show me all open issues" → get_jira_issues_by_status with status="Open"
 - "Get details for PROJ-123" → get_jira_issue_details with issue_key="PROJ-123"
 - "Find issues labeled '2025'" → get_jira_issues_by_label with label="2025"
-- "Find login problems" → search_jira_issues with query="login"
-- "Issues about authentication" → search_jira_issues with query="authentication"
 - "Find high priority issues" → get_jira_issues_by_severity with severity="High"
-- "Issues with label 'urgent'" → get_jira_issues_by_label with label="urgent"
 
 Always provide helpful, clear responses based on the Jira data returned."""
     
@@ -380,6 +465,69 @@ Always provide helpful, clear responses based on the Jira data returned."""
                 # Create JQL query to search by priority (severity)
                 project_key = os.getenv('JIRA_PROJECT', 'PROJECT')
                 jql_query = f"project = {project_key} AND priority = {severity} ORDER BY created DESC"
+                return {
+                    "success": True,
+                    "data": self.jira_client.search_issues(query=jql_query, max_results=max_results)
+                }
+            
+            elif function_name == "get_jira_issues_by_text_and_status":
+                text_query = function_args["text_query"]
+                status = function_args["status"]
+                max_results = function_args.get("max_results", self._current_max_results)
+                
+                # Normalize status name
+                status_mapping = {
+                    'to-do': 'TO-DO',
+                    'todo': 'TO-DO', 
+                    'to do': 'To Do'
+                }
+                normalized_status = status_mapping.get(status.lower(), status)
+                
+                # Create JQL query to search by text content AND status
+                project_key = os.getenv('JIRA_PROJECT', 'PROJECT')
+                jql_query = f"project = {project_key} AND (summary ~ '{text_query}' OR description ~ '{text_query}') AND status = '{normalized_status}' ORDER BY created DESC"
+                return {
+                    "success": True,
+                    "data": self.jira_client.search_issues(query=jql_query, max_results=max_results)
+                }
+            
+            elif function_name == "get_jira_issues_by_priority_and_status":
+                priority = function_args["priority"]
+                status = function_args["status"]
+                max_results = function_args.get("max_results", self._current_max_results)
+                
+                # Normalize status name
+                status_mapping = {
+                    'to-do': 'TO-DO',
+                    'todo': 'TO-DO',
+                    'to do': 'To Do'
+                }
+                normalized_status = status_mapping.get(status.lower(), status)
+                
+                # Create JQL query to search by priority AND status
+                project_key = os.getenv('JIRA_PROJECT', 'PROJECT')
+                jql_query = f"project = {project_key} AND priority = {priority} AND status = '{normalized_status}' ORDER BY created DESC"
+                return {
+                    "success": True,
+                    "data": self.jira_client.search_issues(query=jql_query, max_results=max_results)
+                }
+            
+            elif function_name == "get_jira_issues_by_label_and_status":
+                label = function_args["label"]
+                status = function_args["status"]
+                max_results = function_args.get("max_results", self._current_max_results)
+                
+                # Normalize status name
+                status_mapping = {
+                    'to-do': 'TO-DO',
+                    'todo': 'TO-DO',
+                    'to do': 'To Do'
+                }
+                normalized_status = status_mapping.get(status.lower(), status)
+                
+                # Create JQL query to search by label AND status
+                project_key = os.getenv('JIRA_PROJECT', 'PROJECT')
+                jql_query = f"project = {project_key} AND labels = {label} AND status = '{normalized_status}' ORDER BY created DESC"
                 return {
                     "success": True,
                     "data": self.jira_client.search_issues(query=jql_query, max_results=max_results)

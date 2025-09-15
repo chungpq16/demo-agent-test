@@ -151,17 +151,6 @@ class StreamlitJiraApp:
             
             # Show current setting
             st.caption(f"Current limit: {jira_limit} issues")
-            
-            # Recent activity
-            st.subheader("📈 Recent Activity")
-            if 'chat_history' in st.session_state and st.session_state.chat_history:
-                recent_count = min(3, len(st.session_state.chat_history))
-                for i in range(recent_count):
-                    msg = st.session_state.chat_history[-(i+1)]
-                    if msg['role'] == 'user':
-                        st.caption(f"🗣️ {msg['content'][:50]}...")
-            else:
-                st.caption("No recent activity")
     
     def _render_main_content(self):
         """Render the main content area - chat interface."""
