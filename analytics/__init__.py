@@ -30,12 +30,13 @@ class JiraAnalyticsEngine:
         self.anomaly_detector = None
         logger.info("🧠 Analytics Engine initialized")
     
-    def analyze_issues(self, issues: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def analyze_issues(self, issues: List[Dict[str, Any]], options: Dict[str, bool] = None) -> Dict[str, Any]:
         """
         Comprehensive analysis of Jira issues.
         
         Args:
             issues: List of Jira issues
+            options: Dictionary of analysis options to control which analyses to run
             
         Returns:
             Dictionary containing all analytics results
@@ -44,6 +45,13 @@ class JiraAnalyticsEngine:
             logger.warning("⚠️ No issues provided for analysis")
             return {"error": "No issues to analyze"}
         
+        if options is None:
+            options = {
+                'enable_sentiment_analysis': True,
+                'enable_predictive_analytics': True,
+                'enable_bottleneck_detection': True
+            }
+
         logger.info(f"🔍 Starting comprehensive analysis of {len(issues)} issues")
         
         df = self._prepare_dataframe(issues)
@@ -52,13 +60,20 @@ class JiraAnalyticsEngine:
             "basic_metrics": self._calculate_basic_metrics(df),
             "time_analysis": self._analyze_time_patterns(df),
             "team_performance": self._analyze_team_performance(df),
-            "sentiment_analysis": self._analyze_sentiment(df),
-            "bottleneck_detection": self._detect_bottlenecks(df),
-            "predictive_insights": self._predict_potential_blockers(df),
-            "anomaly_detection": self._detect_anomalies(df),
-            "trend_analysis": self._analyze_trends(df),
-            "workload_distribution": self._analyze_workload_distribution(df)
+            "workload_distribution": self._analyze_workload_distribution(df),
+            "trend_analysis": self._analyze_trends(df)
         }
+        
+        # Conditional analyses based on options
+        if options.get('enable_sentiment_analysis', True):
+            results["sentiment_analysis"] = self._analyze_sentiment(df)
+        
+        if options.get('enable_bottleneck_detection', True):
+            results["bottleneck_detection"] = self._detect_bottlenecks(df)
+        
+        if options.get('enable_predictive_analytics', True):
+            results["predictive_insights"] = self._predict_potential_blockers(df)
+            results["anomaly_detection"] = self._detect_anomalies(df)
         
         logger.info("✅ Comprehensive analysis completed")
         return results
