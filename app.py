@@ -93,17 +93,6 @@ class StreamlitJiraApp:
         
         # Navigation
         self._render_navigation()
-        
-        # Render content based on selected page
-        page = st.session_state.get('current_page', 'Chat Assistant')
-        
-        if page == 'Chat Assistant':
-            self._render_sidebar()
-            self._render_main_content()
-        elif page == 'Analytics Dashboard':
-            render_analytics_dashboard()
-        elif page == 'System Status':
-            self._render_system_status_page()
     
     def _render_navigation(self):
         """Render the top navigation."""
@@ -112,18 +101,19 @@ class StreamlitJiraApp:
         
         with tab1:
             st.session_state.current_page = 'Chat Assistant'
-            if st.session_state.get('current_page') == 'Chat Assistant':
-                st.empty()  # Placeholder for chat interface
+            # Render chat assistant content
+            self._render_sidebar()
+            self._render_main_content()
         
         with tab2:
             st.session_state.current_page = 'Analytics Dashboard'
-            if st.session_state.get('current_page') == 'Analytics Dashboard':
-                st.empty()  # Will be filled by analytics dashboard
+            # Render analytics dashboard content
+            render_analytics_dashboard()
         
         with tab3:
             st.session_state.current_page = 'System Status'
-            if st.session_state.get('current_page') == 'System Status':
-                st.empty()  # Will be filled by system status
+            # Render system status content
+            self._render_system_status_page()
     
     def _render_sidebar(self):
         """Render the sidebar with options and system status."""
