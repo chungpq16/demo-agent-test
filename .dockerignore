@@ -1,0 +1,59 @@
+# Git files
+.git
+.gitignore
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+.coverage
+.pytest_cache/
+
+# Virtual environments
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs
+*.log
+logs/
+genai_app_*.log
+
+# Environment files (will be provided at runtime)
+.env
+
+# Documentation
+README.md
+PRD.md
+*.md
+
+# Test files
+test_*.py
+*_test.py
+tests/
+
+# Cache and temporary files
+.cache/
+.tmp/
+temp/

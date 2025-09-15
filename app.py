@@ -96,7 +96,7 @@ class StreamlitJiraApp:
     def _render_navigation(self):
         """Render the top navigation."""
         # Navigation tabs
-        tab1, tab2, tab3 = st.tabs(["💬 Chat Assistant", "📊 Analytics Dashboard", "🔧 System Status"])
+        tab1, tab2 = st.tabs(["💬 Chat Assistant", "📊 Analytics Dashboard"])
         
         with tab1:
             st.session_state.current_page = 'Chat Assistant'
@@ -108,11 +108,6 @@ class StreamlitJiraApp:
             st.session_state.current_page = 'Analytics Dashboard'
             # Render analytics dashboard content
             render_analytics_dashboard()
-        
-        with tab3:
-            st.session_state.current_page = 'System Status'
-            # Render system status content
-            self._render_system_status_page()
     
     def _render_sidebar(self):
         """Render the sidebar with options and system status."""
@@ -221,59 +216,6 @@ class StreamlitJiraApp:
         
         # Rerun to show the new messages
         st.rerun()
-    
-    def _render_system_status_page(self):
-        """Render a dedicated system status page."""
-        st.header("🔧 System Status & Health Check")
-        
-        # Comprehensive system health check
-        health_status = self._check_system_health()
-        
-        # Overall status card
-        if health_status['overall'] == 'healthy':
-            st.success("✅ All Systems Operational")
-        elif health_status['overall'] == 'warning':
-            st.warning("⚠️ Some Issues Detected")
-        else:
-            st.error("❌ System Errors Detected")
-        
-        # Detailed component status
-        st.subheader("📊 Component Status")
-        
-        col1, col2, col3 = st.columns(3)
-        
-        components = [comp for comp in health_status.keys() if comp != 'overall']
-        for i, component in enumerate(components):
-            with [col1, col2, col3][i % 3]:
-                status = health_status[component]
-                
-                if status['status'] == 'healthy':
-                    st.success(f"✅ **{component.title()}**\n\n{status['message']}")
-                elif status['status'] == 'warning':
-                    st.warning(f"⚠️ **{component.title()}**\n\n{status['message']}")
-                else:
-                    st.error(f"❌ **{component.title()}**\n\n{status['message']}")
-        
-        # System metrics
-        st.subheader("📈 System Metrics")
-        
-        col1, col2, col3, col4 = st.columns(4)
-        
-        with col1:
-            if 'chat_history' in st.session_state:
-                total_messages = len([msg for msg in st.session_state.chat_history if msg['role'] == 'user'])
-            else:
-                total_messages = 0
-            st.metric("Total Queries", total_messages)
-        
-        with col2:
-            st.metric("Uptime", "Active")
-        
-        with col3:
-            st.metric("Response Time", "< 1s")
-        
-        with col4:
-            st.metric("Success Rate", "99.9%")
     
     def _check_system_health(self) -> dict:
         """Check the health of all system components."""
