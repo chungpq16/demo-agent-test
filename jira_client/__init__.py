@@ -232,7 +232,8 @@ class JiraClient:
             
         try:
             # If query contains JQL syntax, use it directly, otherwise search in summary and description
-            if any(keyword in query.upper() for keyword in ['AND', 'OR', 'ORDER BY', 'PROJECT']):
+            jql_keywords = ['AND', 'OR', 'ORDER BY', 'PROJECT', 'LABELS', 'PRIORITY', 'STATUS', 'ASSIGNEE', 'CREATED', 'UPDATED', '=', '!=', '~', 'IN', 'NOT IN']
+            if any(keyword in query.upper() for keyword in jql_keywords):
                 jql = query
             else:
                 jql = f'project = {self.project_key} AND (summary ~ "{query}" OR description ~ "{query}") ORDER BY created DESC'

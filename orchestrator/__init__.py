@@ -3,6 +3,7 @@ Orchestrator Module
 Implements prompt-based orchestration logic for Jira operations via LLM Farm.
 """
 import json
+import os
 import re
 from typing import Dict, List, Any, Optional
 from llm_farm_client import LLMFarmClient
@@ -154,20 +155,35 @@ You have access to the following Jira operations:
 1. get_all_jira_issues: Get all issues from the project
 2. get_jira_issues_by_status: Get issues filtered by status (Open, In Progress, Done, Closed, Resolved)
 3. get_jira_issue_details: Get detailed information for a specific issue by key
-4. search_jira_issues: Search issues using text or JQL queries
-5. get_jira_issues_by_label: Get issues filtered by label (e.g., frontend, backend, bug, feature)
+4. search_jira_issues: Search issues using text or JQL queries (for general content search)
+5. get_jira_issues_by_label: Get issues filtered by SPECIFIC label names (when user mentions exact label)
 6. get_jira_issues_by_severity: Get issues filtered by severity/priority (Critical, High, Medium, Low, etc.)
 
-When a user asks about Jira issues, analyze their request and call the appropriate function.
+**IMPORTANT DECISION RULES:**
+
+🏷️ **Use get_jira_issues_by_label when:**
+- User asks for issues with a SPECIFIC label name in quotes or explicitly mentions "labeled" "label"
+- Examples: "Find issues labeled '2025'", "Show issues with label 'bug'", "Get all '2024' labeled issues"
+
+🔍 **Use search_jira_issues when:**
+- User asks for general content search or mentions topics/keywords without specific label syntax
+- Examples: "Show me all frontend issues", "Find login problems", "Issues about authentication"
+
+💬 **For general questions, provide direct helpful responses without function calls:**
+- Questions about Jira concepts, workflow advice, best practices
+- "How do I create an issue?", "What's the difference between bug and story?"
+
+When a user asks about Jira issues, analyze their request carefully and call the appropriate function.
 After getting the results, provide a clear, human-readable summary of the information.
 
 Examples:
-- "Show me all open issues" → use get_jira_issues_by_status with status="Open"
-- "Get details for PROJ-123" → use get_jira_issue_details with issue_key="PROJ-123"
-- "Find issues related to login" → use search_jira_issues with query="login"
-- "What issues are in progress?" → use get_jira_issues_by_status with status="In Progress"
-- "Show me all frontend issues" → use get_jira_issues_by_label with label="frontend"
-- "Find high priority issues" → use get_jira_issues_by_severity with severity="High"
+- "Show me all open issues" → get_jira_issues_by_status with status="Open"
+- "Get details for PROJ-123" → get_jira_issue_details with issue_key="PROJ-123"
+- "Find issues labeled '2025'" → get_jira_issues_by_label with label="2025"
+- "Show me all frontend issues" → search_jira_issues with query="frontend"
+- "What issues are about login?" → search_jira_issues with query="login"
+- "Find high priority issues" → get_jira_issues_by_severity with severity="High"
+- "Issues with label 'urgent'" → get_jira_issues_by_label with label="urgent"
 
 Always provide helpful, clear responses based on the Jira data returned."""
     
@@ -270,7 +286,8 @@ Always provide helpful, clear responses based on the Jira data returned."""
                 label = function_args["label"]
                 max_results = function_args.get("max_results", 50)
                 # Create JQL query to search by label
-                jql_query = f"labels = {label}"
+                project_key = os.getenv('JIRA_PROJECT', 'PROJECT')
+                jql_query = f"project = {project_key} AND labels = {label} ORDER BY created DESC"
                 return {
                     "success": True,
                     "data": self.jira_client.search_issues(query=jql_query, max_results=max_results)
@@ -280,7 +297,8 @@ Always provide helpful, clear responses based on the Jira data returned."""
                 severity = function_args["severity"]
                 max_results = function_args.get("max_results", 50)
                 # Create JQL query to search by priority (severity)
-                jql_query = f"priority = {severity}"
+                project_key = os.getenv('JIRA_PROJECT', 'PROJECT')
+                jql_query = f"project = {project_key} AND priority = {severity} ORDER BY created DESC"
                 return {
                     "success": True,
                     "data": self.jira_client.search_issues(query=jql_query, max_results=max_results)
