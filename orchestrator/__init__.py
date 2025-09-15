@@ -159,29 +159,50 @@ You have access to the following Jira operations:
 5. get_jira_issues_by_label: Get issues filtered by SPECIFIC label names (when user mentions exact label)
 6. get_jira_issues_by_severity: Get issues filtered by severity/priority (Critical, High, Medium, Low, etc.)
 
-**IMPORTANT DECISION RULES:**
+**CRITICAL DECISION RULES:**
+
+🗂️ **Use get_all_jira_issues when:**
+- User wants ALL issues from the project without any filtering
+- Examples: "Show me all jira issues", "Get all issues", "List all project issues", "What issues do we have?"
 
 🏷️ **Use get_jira_issues_by_label when:**
-- User asks for issues with a SPECIFIC label name in quotes or explicitly mentions "labeled" "label"
+- User asks for issues with a SPECIFIC label name or mentions "labeled" "label"
 - Examples: "Find issues labeled '2025'", "Show issues with label 'bug'", "Get all '2024' labeled issues"
 
-🔍 **Use search_jira_issues when:**
-- User asks for general content search or mentions topics/keywords without specific label syntax
-- Examples: "Show me all frontend issues", "Find login problems", "Issues about authentication"
+⚡ **Use get_jira_issues_by_severity when:**
+- User asks for issues with specific priority/severity levels
+- Examples: "Show high priority issues", "Find critical bugs", "Get low severity issues"
+
+📋 **Use get_jira_issues_by_status when:**
+- User asks for issues by workflow status
+- Examples: "Show open issues", "Get completed tasks", "What's in progress?"
+
+🔍 **Use search_jira_issues ONLY when:**
+- User asks for general content search or mentions topics/keywords (NOT labels or severity)
+- User wants to search within issue content (summary/description)
+- Examples: "Find login problems", "Issues about authentication", "Search for database errors"
 
 💬 **For general questions, provide direct helpful responses without function calls:**
 - Questions about Jira concepts, workflow advice, best practices
 - "How do I create an issue?", "What's the difference between bug and story?"
 
+**IMPORTANT: DO NOT use search_jira_issues for:**
+- Getting all issues (use get_all_jira_issues)
+- Label searches (use get_jira_issues_by_label)
+- Severity searches (use get_jira_issues_by_severity)
+
 When a user asks about Jira issues, analyze their request carefully and call the appropriate function.
 After getting the results, provide a clear, human-readable summary of the information.
 
 Examples:
+- "Show me all jira issues" → get_all_jira_issues
+- "Get all issues" → get_all_jira_issues
+- "List all project issues" → get_all_jira_issues
 - "Show me all open issues" → get_jira_issues_by_status with status="Open"
 - "Get details for PROJ-123" → get_jira_issue_details with issue_key="PROJ-123"
 - "Find issues labeled '2025'" → get_jira_issues_by_label with label="2025"
-- "Show me all frontend issues" → search_jira_issues with query="frontend"
-- "What issues are about login?" → search_jira_issues with query="login"
+- "Find login problems" → search_jira_issues with query="login"
+- "Issues about authentication" → search_jira_issues with query="authentication"
 - "Find high priority issues" → get_jira_issues_by_severity with severity="High"
 - "Issues with label 'urgent'" → get_jira_issues_by_label with label="urgent"
 
@@ -216,8 +237,37 @@ Always provide helpful, clear responses based on the Jira data returned."""
             if hasattr(message, 'function_call') and message.function_call:
                 function_result = self._execute_function_call(message.function_call)
                 
-                # Get final response from LLM with function results
-                follow_up_prompt = f"The function returned: {json.dumps(function_result, indent=2)}\n\nPlease provide a clear, human-readable summary of this information for the user."
+                # Special handling for get_all_jira_issues with categorized summary
+                if (hasattr(message.function_call, 'name') and 
+                    message.function_call.name == 'get_all_jira_issues' and 
+                    function_result.get('success') and 
+                    'summary' in function_result):
+                    
+                    summary = function_result['summary']
+                    follow_up_prompt = f"""Based on the following Jira issues analysis, provide a clear, well-formatted summary:
+
+ANALYSIS DATA:
+- Total Issues: {summary['total_issues']}
+- Status Breakdown: {summary['status_breakdown']}
+- Priority Breakdown: {summary['priority_breakdown']}
+- Issue Type Breakdown: {summary['type_breakdown']}
+- Top Assignees: {summary['assignee_breakdown']}
+- Most Recent Issues: {summary['recent_issues']}
+- Suggested Filters: {summary['suggestions']}
+
+Please format this as a comprehensive overview with:
+1. 📊 Total count and key statistics
+2. 📋 Status distribution with emojis
+3. 🔥 Priority levels breakdown
+4. 👥 Assignee workload
+5. 🕒 Recent activity (show 3-5 most recent issues)
+6. 💡 Helpful suggestions for further filtering
+
+Make it engaging and actionable for project management."""
+                
+                else:
+                    # Standard function result handling
+                    follow_up_prompt = f"The function returned: {json.dumps(function_result, indent=2)}\n\nPlease provide a clear, human-readable summary of this information for the user."
                 
                 final_response = self.llm_client.completion(
                     user_text=follow_up_prompt,
@@ -254,9 +304,15 @@ Always provide helpful, clear responses based on the Jira data returned."""
         try:
             if function_name == "get_all_jira_issues":
                 max_results = function_args.get("max_results", 50)
+                issues_data = self.jira_client.get_all_issues(max_results=max_results)
+                
+                # Generate categorized summary
+                categorized_summary = self._generate_categorized_summary(issues_data)
+                
                 return {
                     "success": True,
-                    "data": self.jira_client.get_all_issues(max_results=max_results)
+                    "data": issues_data,
+                    "summary": categorized_summary
                 }
             
             elif function_name == "get_jira_issues_by_status":
@@ -316,6 +372,86 @@ Always provide helpful, clear responses based on the Jira data returned."""
                 "success": False,
                 "error": str(e)
             }
+    
+    def _generate_categorized_summary(self, issues_data: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Generate categorized summary of issues for better overview.
+        
+        Args:
+            issues_data: List of formatted issue data
+            
+        Returns:
+            Dictionary containing categorized summary
+        """
+        if not issues_data:
+            return {
+                "total_issues": 0,
+                "message": "No issues found in the project."
+            }
+        
+        # Initialize counters
+        status_counts = {}
+        priority_counts = {}
+        type_counts = {}
+        assignee_counts = {}
+        recent_issues = []
+        
+        # Process each issue
+        for issue in issues_data:
+            # Count by status
+            status = issue.get('status', 'Unknown')
+            status_counts[status] = status_counts.get(status, 0) + 1
+            
+            # Count by priority
+            priority = issue.get('priority', 'Unknown')
+            priority_counts[priority] = priority_counts.get(priority, 0) + 1
+            
+            # Count by type
+            issue_type = issue.get('issue_type', 'Unknown')
+            type_counts[issue_type] = type_counts.get(issue_type, 0) + 1
+            
+            # Count by assignee
+            assignee = issue.get('assignee') or 'Unassigned'
+            assignee_counts[assignee] = assignee_counts.get(assignee, 0) + 1
+        
+        # Get 5 most recent issues
+        recent_issues = issues_data[:5]  # Already sorted by created DESC
+        
+        # Create summary
+        summary = {
+            "total_issues": len(issues_data),
+            "status_breakdown": dict(sorted(status_counts.items(), key=lambda x: x[1], reverse=True)),
+            "priority_breakdown": dict(sorted(priority_counts.items(), key=lambda x: x[1], reverse=True)),
+            "type_breakdown": dict(sorted(type_counts.items(), key=lambda x: x[1], reverse=True)),
+            "assignee_breakdown": dict(sorted(assignee_counts.items(), key=lambda x: x[1], reverse=True)),
+            "recent_issues": recent_issues,
+            "suggestions": self._generate_filter_suggestions(status_counts, priority_counts, assignee_counts)
+        }
+        
+        return summary
+    
+    def _generate_filter_suggestions(self, status_counts: Dict, priority_counts: Dict, assignee_counts: Dict) -> List[str]:
+        """Generate helpful filter suggestions based on issue distribution."""
+        suggestions = []
+        
+        # Status suggestions
+        if status_counts.get('Open', 0) > 0:
+            suggestions.append("'show open issues'")
+        if status_counts.get('In Progress', 0) > 0:
+            suggestions.append("'show in progress issues'")
+            
+        # Priority suggestions
+        if priority_counts.get('Critical', 0) > 0 or priority_counts.get('High', 0) > 0:
+            suggestions.append("'show high priority issues'")
+            
+        # Assignee suggestions
+        top_assignees = list(assignee_counts.keys())[:2]
+        for assignee in top_assignees:
+            if assignee != 'Unassigned':
+                suggestions.append(f"'issues assigned to {assignee}'")
+                break
+                
+        return suggestions[:3]  # Limit to 3 suggestions
     
     def health_check(self) -> Dict[str, bool]:
         """
