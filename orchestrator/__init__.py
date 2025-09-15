@@ -24,6 +24,10 @@ class JiraOrchestrator:
         # Define available Jira functions for LLM
         self.jira_functions = self._define_jira_functions()
         
+        # Cache for storing retrieved issues to avoid repeated API calls
+        self.cached_issues = None
+        self.cached_issues_type = None  # Track what type of issues are cached
+        
         logger.info("Jira Orchestrator initialized successfully")
     
     def _define_jira_functions(self) -> List[Dict]:
@@ -121,6 +125,25 @@ class JiraOrchestrator:
                 }
             },
             {
+                "name": "show_more_issues",
+                "description": "Show more issues from the previously retrieved data without calling Jira API again",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "start_index": {
+                            "type": "integer",
+                            "description": "Starting index for the next batch of issues",
+                            "default": 5
+                        },
+                        "batch_size": {
+                            "type": "integer", 
+                            "description": "Number of issues to show in this batch",
+                            "default": 5
+                        }
+                    }
+                }
+            },
+            {
                 "name": "get_jira_issues_by_severity",
                 "description": "Get Jira issues filtered by severity/priority",
                 "parameters": {
@@ -158,12 +181,17 @@ You have access to the following Jira operations:
 4. search_jira_issues: Search issues using text or JQL queries (for general content search)
 5. get_jira_issues_by_label: Get issues filtered by SPECIFIC label names (when user mentions exact label)
 6. get_jira_issues_by_severity: Get issues filtered by severity/priority (Critical, High, Medium, Low, etc.)
+7. show_more_issues: Show more issues from previously retrieved data (when user asks for "show more", "next", "more issues")
 
 **CRITICAL DECISION RULES:**
 
 🗂️ **Use get_all_jira_issues when:**
 - User wants ALL issues from the project without any filtering
 - Examples: "Show me all jira issues", "Get all issues", "List all project issues", "What issues do we have?"
+
+🔄 **Use show_more_issues when:**
+- User asks to see more issues after initial results were shown
+- Examples: "show more", "show more issues", "next", "more", "show remaining issues"
 
 🏷️ **Use get_jira_issues_by_label when:**
 - User asks for issues with a SPECIFIC label name or mentions "labeled" "label"
@@ -198,6 +226,7 @@ Examples:
 - "Show me all jira issues" → get_all_jira_issues
 - "Get all issues" → get_all_jira_issues
 - "List all project issues" → get_all_jira_issues
+- "Show more" or "more issues" → show_more_issues
 - "Show me all open issues" → get_jira_issues_by_status with status="Open"
 - "Get details for PROJ-123" → get_jira_issue_details with issue_key="PROJ-123"
 - "Find issues labeled '2025'" → get_jira_issues_by_label with label="2025"
@@ -244,26 +273,45 @@ Always provide helpful, clear responses based on the Jira data returned."""
                     'summary' in function_result):
                     
                     summary = function_result['summary']
-                    follow_up_prompt = f"""Based on the following Jira issues analysis, provide a clear, well-formatted summary:
+                    follow_up_prompt = f"""Based on the following Jira issues analysis, provide a clear, simple summary:
 
 ANALYSIS DATA:
 - Total Issues: {summary['total_issues']}
 - Status Breakdown: {summary['status_breakdown']}
-- Priority Breakdown: {summary['priority_breakdown']}
-- Issue Type Breakdown: {summary['type_breakdown']}
-- Top Assignees: {summary['assignee_breakdown']}
-- Most Recent Issues: {summary['recent_issues']}
-- Suggested Filters: {summary['suggestions']}
+- Displayed Issues: {summary['displayed_issues']}
+- Has More: {summary['has_more']}
+- Remaining Count: {summary.get('remaining_count', 0)}
 
-Please format this as a comprehensive overview with:
-1. 📊 Total count and key statistics
-2. 📋 Status distribution with emojis
-3. 🔥 Priority levels breakdown
-4. 👥 Assignee workload
-5. 🕒 Recent activity (show 3-5 most recent issues)
-6. 💡 Helpful suggestions for further filtering
+Please format this as:
+1. 📊 Total count: "Found X issues total"
+2. 📋 Status breakdown with emojis (✅ Done, � In Progress, 🆕 Open, etc.)
+3. Show the displayed issues (title, key, status, assignee)
+4. If has_more is True, mention "Say 'show more' to see the remaining X issues"
 
-Make it engaging and actionable for project management."""
+Keep it clean and simple - just overview + status + first batch + show more option."""
+                
+                # Special handling for show_more_issues
+                elif (hasattr(message.function_call, 'name') and 
+                      message.function_call.name == 'show_more_issues' and 
+                      function_result.get('success')):
+                    
+                    batch_info = function_result.get('batch_info', {})
+                    follow_up_prompt = f"""Show the next batch of issues:
+
+BATCH DATA:
+- Issues: {function_result['data']}
+- Showing: {batch_info.get('start_index', 0) + 1} to {batch_info.get('end_index', 0)}
+- Total Available: {batch_info.get('total_cached', 0)}
+- Has More: {batch_info.get('has_more', False)}
+- Source: {batch_info.get('cached_type', 'unknown')}
+
+Format as:
+📋 Showing issues X-Y of Z:
+[List the issues with key, title, status, assignee]
+
+If has more: "Say 'show more' to see additional issues"
+If no more: "That's all the issues from this query"
+"""
                 
                 else:
                     # Standard function result handling
@@ -306,7 +354,11 @@ Make it engaging and actionable for project management."""
                 max_results = function_args.get("max_results", 50)
                 issues_data = self.jira_client.get_all_issues(max_results=max_results)
                 
-                # Generate categorized summary
+                # Cache the data for "show more" functionality
+                self.cached_issues = issues_data
+                self.cached_issues_type = "all_issues"
+                
+                # Generate simplified summary
                 categorized_summary = self._generate_categorized_summary(issues_data)
                 
                 return {
@@ -360,6 +412,32 @@ Make it engaging and actionable for project management."""
                     "data": self.jira_client.search_issues(query=jql_query, max_results=max_results)
                 }
             
+            elif function_name == "show_more_issues":
+                start_index = function_args.get("start_index", 5)
+                batch_size = function_args.get("batch_size", 5)
+                
+                if not self.cached_issues:
+                    return {
+                        "success": False,
+                        "error": "No cached issues available. Please retrieve issues first."
+                    }
+                
+                end_index = start_index + batch_size
+                batch_issues = self.cached_issues[start_index:end_index]
+                has_more = end_index < len(self.cached_issues)
+                
+                return {
+                    "success": True,
+                    "data": batch_issues,
+                    "batch_info": {
+                        "start_index": start_index,
+                        "end_index": min(end_index, len(self.cached_issues)),
+                        "total_cached": len(self.cached_issues),
+                        "has_more": has_more,
+                        "cached_type": self.cached_issues_type
+                    }
+                }
+            
             else:
                 return {
                     "success": False,
@@ -375,83 +453,41 @@ Make it engaging and actionable for project management."""
     
     def _generate_categorized_summary(self, issues_data: List[Dict[str, Any]]) -> Dict[str, Any]:
         """
-        Generate categorized summary of issues for better overview.
+        Generate simple categorized summary with status breakdown only.
         
         Args:
             issues_data: List of formatted issue data
             
         Returns:
-            Dictionary containing categorized summary
+            Dictionary containing simplified summary
         """
         if not issues_data:
             return {
                 "total_issues": 0,
-                "message": "No issues found in the project."
+                "status_breakdown": {},
+                "displayed_issues": [],
+                "has_more": False
             }
         
-        # Initialize counters
+        # Count by status only
         status_counts = {}
-        priority_counts = {}
-        type_counts = {}
-        assignee_counts = {}
-        recent_issues = []
-        
-        # Process each issue
         for issue in issues_data:
-            # Count by status
             status = issue.get('status', 'Unknown')
             status_counts[status] = status_counts.get(status, 0) + 1
-            
-            # Count by priority
-            priority = issue.get('priority', 'Unknown')
-            priority_counts[priority] = priority_counts.get(priority, 0) + 1
-            
-            # Count by type
-            issue_type = issue.get('issue_type', 'Unknown')
-            type_counts[issue_type] = type_counts.get(issue_type, 0) + 1
-            
-            # Count by assignee
-            assignee = issue.get('assignee') or 'Unassigned'
-            assignee_counts[assignee] = assignee_counts.get(assignee, 0) + 1
         
-        # Get 5 most recent issues
-        recent_issues = issues_data[:5]  # Already sorted by created DESC
+        # Show first 5 issues
+        displayed_issues = issues_data[:5]
+        has_more = len(issues_data) > 5
         
-        # Create summary
         summary = {
             "total_issues": len(issues_data),
             "status_breakdown": dict(sorted(status_counts.items(), key=lambda x: x[1], reverse=True)),
-            "priority_breakdown": dict(sorted(priority_counts.items(), key=lambda x: x[1], reverse=True)),
-            "type_breakdown": dict(sorted(type_counts.items(), key=lambda x: x[1], reverse=True)),
-            "assignee_breakdown": dict(sorted(assignee_counts.items(), key=lambda x: x[1], reverse=True)),
-            "recent_issues": recent_issues,
-            "suggestions": self._generate_filter_suggestions(status_counts, priority_counts, assignee_counts)
+            "displayed_issues": displayed_issues,
+            "has_more": has_more,
+            "remaining_count": len(issues_data) - 5 if has_more else 0
         }
         
         return summary
-    
-    def _generate_filter_suggestions(self, status_counts: Dict, priority_counts: Dict, assignee_counts: Dict) -> List[str]:
-        """Generate helpful filter suggestions based on issue distribution."""
-        suggestions = []
-        
-        # Status suggestions
-        if status_counts.get('Open', 0) > 0:
-            suggestions.append("'show open issues'")
-        if status_counts.get('In Progress', 0) > 0:
-            suggestions.append("'show in progress issues'")
-            
-        # Priority suggestions
-        if priority_counts.get('Critical', 0) > 0 or priority_counts.get('High', 0) > 0:
-            suggestions.append("'show high priority issues'")
-            
-        # Assignee suggestions
-        top_assignees = list(assignee_counts.keys())[:2]
-        for assignee in top_assignees:
-            if assignee != 'Unassigned':
-                suggestions.append(f"'issues assigned to {assignee}'")
-                break
-                
-        return suggestions[:3]  # Limit to 3 suggestions
     
     def health_check(self) -> Dict[str, bool]:
         """
