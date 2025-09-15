@@ -4,6 +4,7 @@ Streamlit Analytics Dashboard for Smart Jira Analytics
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import os
 from typing import Dict, Any, List
 from datetime import datetime, timedelta
 
@@ -58,12 +59,12 @@ class AnalyticsDashboard:
         with st.sidebar:
             st.header("🎛️ Analytics Controls")
             
-            # Project filter
-            project_key = st.text_input(
-                "Project Key", 
-                value=st.session_state.get('project_key', ''),
-                help="Enter a specific project key to filter results (e.g., 'PROJ')"
-            )
+            # Get project key from environment
+            project_key = os.getenv('JIRA_PROJECT', '').strip()
+            if project_key:
+                st.info(f"📊 Analyzing Project: **{project_key}**")
+            else:
+                st.warning("⚠️ No project key configured in environment variables")
             
             # Date range filter
             st.subheader("📅 Date Range")
@@ -119,9 +120,8 @@ class AnalyticsDashboard:
             if auto_refresh:
                 st.rerun()  # This will cause the app to refresh periodically
         
-        # Store project key in session state
-        if project_key:
-            st.session_state.project_key = project_key
+        # Store project key in session state (from environment)
+        st.session_state.project_key = project_key
     
     def _load_analytics_data(self, project_key=None, start_date=None, end_date=None, 
                            max_results=50, enable_sentiment=True, enable_predictions=True, 

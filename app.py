@@ -130,41 +130,12 @@ class StreamlitJiraApp:
             else:
                 st.error("❌ System errors detected")
             
-            # Detailed status in expander
+                        # Detailed status in expander
             with st.expander("📊 Detailed Status"):
                 for component, status in health_status.items():
                     if component != 'overall':
                         icon = "✅" if status['status'] == 'healthy' else "⚠️" if status['status'] == 'warning' else "❌"
                         st.write(f"{icon} **{component}**: {status['message']}")
-            
-            # App mode selection
-            st.subheader("🚀 App Mode")
-            app_mode = st.selectbox(
-                "Choose mode:",
-                ["💬 Chat Interface", "📊 Quick Actions", "🔍 Search & Filter", "⚙️ Settings"],
-                key="app_mode"
-            )
-            
-            # Store mode in session state
-            st.session_state.current_mode = app_mode
-            
-            # Additional controls based on mode
-            if app_mode == "💬 Chat Interface":
-                st.subheader("💬 Chat Settings")
-                st.session_state.chat_mode = st.selectbox(
-                    "Response style:",
-                    ["Detailed", "Concise", "Technical"],
-                    key="chat_response_style"
-                )
-            
-            elif app_mode == "📊 Quick Actions":
-                st.subheader("⚡ Quick Actions")
-                if st.button("📋 List Recent Issues"):
-                    st.session_state.quick_action = "list_recent"
-                if st.button("🎯 Show My Issues"):
-                    st.session_state.quick_action = "my_issues"
-                if st.button("🚨 High Priority Issues"):
-                    st.session_state.quick_action = "high_priority"
             
             # Recent activity
             st.subheader("📈 Recent Activity")
@@ -178,17 +149,8 @@ class StreamlitJiraApp:
                 st.caption("No recent activity")
     
     def _render_main_content(self):
-        """Render the main content area based on selected mode."""
-        current_mode = st.session_state.get('current_mode', '💬 Chat Interface')
-        
-        if current_mode == "💬 Chat Interface":
-            self._render_chat_interface()
-        elif current_mode == "📊 Quick Actions":
-            self._render_quick_actions()
-        elif current_mode == "🔍 Search & Filter":
-            self._render_search_interface()
-        elif current_mode == "⚙️ Settings":
-            self._render_settings()
+        """Render the main content area - chat interface."""
+        self._render_chat_interface()
     
     def _render_chat_interface(self):
         """Render the chat interface."""
@@ -222,11 +184,6 @@ class StreamlitJiraApp:
         
         if user_input:
             self._process_chat_message(user_input)
-        
-        # Handle quick actions
-        if st.session_state.get('quick_action'):
-            self._handle_quick_action(st.session_state.quick_action)
-            st.session_state.quick_action = None
     
     def _process_chat_message(self, user_input: str):
         """Process a chat message from the user."""
@@ -264,149 +221,6 @@ class StreamlitJiraApp:
         
         # Rerun to show the new messages
         st.rerun()
-    
-    def _handle_quick_action(self, action: str):
-        """Handle quick action buttons."""
-        action_queries = {
-            'list_recent': "Show me the 10 most recent issues from all projects",
-            'my_issues': "Show me issues assigned to me",
-            'high_priority': "Show me all high priority and critical issues"
-        }
-        
-        if action in action_queries:
-            self._process_chat_message(action_queries[action])
-    
-    def _render_quick_actions(self):
-        """Render the quick actions interface."""
-        st.header("📊 Quick Actions Dashboard")
-        
-        # Action buttons in columns
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            st.subheader("🔍 Search")
-            if st.button("📋 Recent Issues", key="qa_recent"):
-                self._process_chat_message("Show me the 10 most recent issues")
-            if st.button("🎯 My Issues", key="qa_my"):
-                self._process_chat_message("Show me issues assigned to me")
-            if st.button("🚨 Critical Issues", key="qa_critical"):
-                self._process_chat_message("Show me all critical and high priority issues")
-        
-        with col2:
-            st.subheader("📝 Create")
-            if st.button("➕ New Task", key="qa_task"):
-                st.session_state.show_create_form = "task"
-            if st.button("🐛 New Bug", key="qa_bug"):
-                st.session_state.show_create_form = "bug"
-            if st.button("📖 New Story", key="qa_story"):
-                st.session_state.show_create_form = "story"
-        
-        with col3:
-            st.subheader("📈 Reports")
-            if st.button("📊 Project Stats", key="qa_stats"):
-                self._process_chat_message("Generate a summary report of all projects")
-            if st.button("⏱️ Time Reports", key="qa_time"):
-                self._process_chat_message("Show me resolution time statistics")
-            if st.button("👥 Team Activity", key="qa_team"):
-                self._process_chat_message("Show me team activity and workload distribution")
-        
-        # Handle create forms
-        if st.session_state.get('show_create_form'):
-            self._render_create_form(st.session_state.show_create_form)
-    
-    def _render_create_form(self, issue_type: str):
-        """Render issue creation form."""
-        st.subheader(f"Create New {issue_type.title()}")
-        
-        with st.form(f"create_{issue_type}"):
-            project = st.text_input("Project Key", placeholder="e.g., PROJ")
-            summary = st.text_input("Summary", placeholder="Brief description")
-            description = st.text_area("Description", placeholder="Detailed description")
-            priority = st.selectbox("Priority", ["Low", "Medium", "High", "Critical"])
-            
-            if st.form_submit_button("Create Issue"):
-                query = f"Create a new {issue_type} in project {project} with summary '{summary}', description '{description}', and priority {priority}"
-                self._process_chat_message(query)
-                st.session_state.show_create_form = None
-                st.rerun()
-    
-    def _render_search_interface(self):
-        """Render the search interface."""
-        st.header("🔍 Advanced Search")
-        
-        # Search form
-        with st.form("search_form"):
-            st.subheader("Search Parameters")
-            
-            col1, col2 = st.columns(2)
-            with col1:
-                search_term = st.text_input("Search Term", placeholder="Enter keywords...")
-                project = st.text_input("Project", placeholder="e.g., PROJ")
-                issue_type = st.selectbox("Issue Type", ["Any", "Task", "Bug", "Story", "Epic"])
-            
-            with col2:
-                status = st.selectbox("Status", ["Any", "Open", "In Progress", "Resolved", "Closed"])
-                priority = st.selectbox("Priority", ["Any", "Low", "Medium", "High", "Critical"])
-                assignee = st.text_input("Assignee", placeholder="Username or email")
-            
-            submitted = st.form_submit_button("🔍 Search")
-            
-            if submitted:
-                # Build search query
-                query_parts = []
-                if search_term:
-                    query_parts.append(f"text contains '{search_term}'")
-                if project:
-                    query_parts.append(f"project = {project}")
-                if issue_type != "Any":
-                    query_parts.append(f"type = {issue_type}")
-                if status != "Any":
-                    query_parts.append(f"status = '{status}'")
-                if priority != "Any":
-                    query_parts.append(f"priority = {priority}")
-                if assignee:
-                    query_parts.append(f"assignee = '{assignee}'")
-                
-                if query_parts:
-                    jql = " AND ".join(query_parts)
-                    search_query = f"Search for issues with JQL: {jql}"
-                    self._process_chat_message(search_query)
-                else:
-                    st.warning("Please specify at least one search parameter.")
-    
-    def _render_settings(self):
-        """Render the settings interface."""
-        st.header("⚙️ Settings")
-        
-        st.subheader("🔧 System Configuration")
-        st.info("System settings are configured via environment variables. Check your .env file.")
-        
-        st.subheader("💬 Chat Preferences")
-        response_style = st.selectbox(
-            "Default Response Style",
-            ["Detailed", "Concise", "Technical"],
-            index=0
-        )
-        
-        show_timestamps = st.checkbox("Show timestamps in chat", value=True)
-        auto_scroll = st.checkbox("Auto-scroll to latest message", value=True)
-        
-        st.subheader("🎨 Interface")
-        theme = st.selectbox("Theme", ["Auto", "Light", "Dark"])
-        
-        if st.button("💾 Save Settings"):
-            st.success("Settings saved!")
-        
-        st.subheader("📊 Usage Statistics")
-        if 'chat_history' in st.session_state:
-            total_messages = len([msg for msg in st.session_state.chat_history if msg['role'] == 'user'])
-            st.metric("Total Messages", total_messages)
-        
-        st.subheader("🧹 Maintenance")
-        if st.button("🗑️ Clear Chat History"):
-            st.session_state.chat_history = []
-            st.success("Chat history cleared!")
-            st.rerun()
     
     def _render_system_status_page(self):
         """Render a dedicated system status page."""
