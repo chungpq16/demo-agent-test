@@ -82,24 +82,47 @@ class JiraAnalyticsEngine:
         """Prepare and clean the issues dataframe."""
         df = pd.DataFrame(issues)
         
-        # Convert date columns
+        # Convert date columns and handle timezones
         date_columns = ['created', 'updated']
         for col in date_columns:
             if col in df.columns:
-                df[col] = pd.to_datetime(df[col], errors='coerce')
+                df[col] = pd.to_datetime(df[col], errors='coerce', utc=True)
+                # Convert to timezone-naive by removing timezone info
+                df[col] = df[col].dt.tz_localize(None)
         
         # Calculate resolution time (if issue is resolved)
         if 'created' in df.columns and 'updated' in df.columns:
             df['resolution_days'] = (df['updated'] - df['created']).dt.days
         
-        # Add derived features
-        df['age_days'] = (datetime.now() - df['created']).dt.days if 'created' in df.columns else 0
+        # Add derived features - use timezone-naive datetime.now()
+        if 'created' in df.columns:
+            now_naive = datetime.now()
+            df['age_days'] = (now_naive - df['created']).dt.days
+        else:
+            df['age_days'] = 0
+            
         df['is_overdue'] = df['age_days'] > 30  # Consider issues over 30 days as potentially overdue
         
-        # Fill missing values
-        df['assignee'] = df['assignee'].fillna('Unassigned')
-        df['priority'] = df['priority'].fillna('Medium')
-        df['description'] = df['description'].fillna('')
+        # Fill missing values - handle missing columns gracefully
+        if 'assignee' in df.columns:
+            df['assignee'] = df['assignee'].fillna('Unassigned')
+        else:
+            df['assignee'] = 'Unassigned'
+            
+        if 'priority' in df.columns:
+            df['priority'] = df['priority'].fillna('Medium')
+        else:
+            df['priority'] = 'Medium'
+            
+        if 'description' in df.columns:
+            df['description'] = df['description'].fillna('')
+        else:
+            df['description'] = ''
+            
+        if 'status' in df.columns:
+            df['status'] = df['status'].fillna('Open')
+        else:
+            df['status'] = 'Open'
         
         logger.debug(f"📊 Prepared dataframe with {len(df)} issues and {len(df.columns)} columns")
         return df
@@ -108,23 +131,43 @@ class JiraAnalyticsEngine:
         """Calculate basic project metrics."""
         logger.debug("📈 Calculating basic metrics")
         
+        if df.empty:
+            return {
+                "total_issues": 0,
+                "status_distribution": {},
+                "priority_distribution": {},
+                "type_distribution": {},
+                "avg_resolution_days": 0,
+                "median_resolution_days": 0,
+                "assignee_distribution": {},
+                "overdue_count": 0
+            }
+        
         total_issues = len(df)
         
         # Status distribution
-        status_counts = df['status'].value_counts().to_dict()
+        status_counts = df['status'].value_counts().to_dict() if 'status' in df.columns else {}
         
         # Priority distribution
-        priority_counts = df['priority'].value_counts().to_dict()
+        priority_counts = df['priority'].value_counts().to_dict() if 'priority' in df.columns else {}
         
         # Issue type distribution
         type_counts = df['issue_type'].value_counts().to_dict() if 'issue_type' in df.columns else {}
         
-        # Time metrics
-        avg_resolution_days = df['resolution_days'].mean() if 'resolution_days' in df.columns else 0
-        median_resolution_days = df['resolution_days'].median() if 'resolution_days' in df.columns else 0
+        # Time metrics - handle missing resolution data
+        avg_resolution_days = 0
+        median_resolution_days = 0
+        if 'resolution_days' in df.columns and df['resolution_days'].notna().any():
+            valid_resolution = df['resolution_days'].dropna()
+            if not valid_resolution.empty:
+                avg_resolution_days = float(valid_resolution.mean())
+                median_resolution_days = float(valid_resolution.median())
         
         # Assignee metrics
-        assignee_counts = df['assignee'].value_counts().to_dict()
+        assignee_counts = df['assignee'].value_counts().to_dict() if 'assignee' in df.columns else {}
+        
+        # Overdue issues
+        overdue_count = int(df['is_overdue'].sum()) if 'is_overdue' in df.columns else 0
         unassigned_count = assignee_counts.get('Unassigned', 0)
         
         return {
