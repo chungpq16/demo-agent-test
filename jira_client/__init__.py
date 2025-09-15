@@ -20,7 +20,12 @@ class JiraClient:
     def __init__(self):
         """Initialize Jira client with configuration from environment."""
         self._setup_client()
-        logger.info("Jira client initialized successfully")
+        
+        # Load configurable limits
+        self.default_limit = int(os.getenv('JIRA_DEFAULT_LIMIT', '10'))
+        self.max_results = int(os.getenv('JIRA_MAX_RESULTS', '50'))
+        
+        logger.info(f"Jira client initialized successfully with default_limit={self.default_limit}, max_results={self.max_results}")
     
     def _setup_client(self):
         """Setup Jira client with authentication."""
@@ -46,16 +51,19 @@ class JiraClient:
             logger.error(f"Failed to initialize Jira client: {str(e)}")
             raise Exception(f"Jira client initialization failed: {str(e)}")
     
-    def get_all_issues(self, max_results: int = 10) -> List[Dict[str, Any]]:
+    def get_all_issues(self, max_results: int = None) -> List[Dict[str, Any]]:
         """
         Get all issues from the configured project.
         
         Args:
-            max_results: Maximum number of results to return
+            max_results: Maximum number of results to return (uses JIRA_DEFAULT_LIMIT if None)
             
         Returns:
             List of issue dictionaries
         """
+        if max_results is None:
+            max_results = self.default_limit
+            
         try:
             jql = f"project = {self.project_key} ORDER BY created DESC"
             
@@ -75,17 +83,20 @@ class JiraClient:
             logger.error(f"Error fetching all issues: {str(e)}")
             raise Exception(f"Failed to fetch all issues: {str(e)}")
     
-    def get_issues_by_status(self, status: str, max_results: int = 10) -> List[Dict[str, Any]]:
+    def get_issues_by_status(self, status: str, max_results: int = None) -> List[Dict[str, Any]]:
         """
         Get issues filtered by status.
         
         Args:
             status: Status to filter by (e.g., 'Open', 'In Progress', 'Done')
-            max_results: Maximum number of results to return
+            max_results: Maximum number of results to return (uses JIRA_DEFAULT_LIMIT if None)
             
         Returns:
             List of issue dictionaries
         """
+        if max_results is None:
+            max_results = self.default_limit
+            
         try:
             # Map common status names
             status_mapping = {
@@ -205,17 +216,20 @@ class JiraClient:
             logger.error(f"Jira health check failed: {str(e)}")
             return False
     
-    def search_issues(self, query: str, max_results: int = 50) -> List[Dict[str, Any]]:
+    def search_issues(self, query: str, max_results: int = None) -> List[Dict[str, Any]]:
         """
         Search issues using JQL or text search.
         
         Args:
             query: Search query (JQL or text)
-            max_results: Maximum number of results
+            max_results: Maximum number of results (uses JIRA_MAX_RESULTS if None)
             
         Returns:
             List of matching issues
         """
+        if max_results is None:
+            max_results = self.max_results
+            
         try:
             # If query contains JQL syntax, use it directly, otherwise search in summary and description
             if any(keyword in query.upper() for keyword in ['AND', 'OR', 'ORDER BY', 'PROJECT']):
