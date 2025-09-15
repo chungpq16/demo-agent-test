@@ -95,13 +95,6 @@ class AnalyticsDashboard:
                 start_date = datetime.now() - timedelta(days=days)
                 end_date = datetime.now()
             
-            # Analytics options
-            st.subheader("🔬 Analytics Options")
-            
-            enable_sentiment = st.checkbox("Enable Sentiment Analysis", value=True)
-            enable_predictions = st.checkbox("Enable Predictive Analytics", value=True)
-            enable_bottlenecks = st.checkbox("Enable Bottleneck Detection", value=True)
-            
             # Max results
             max_results = st.slider("Max Issues to Analyze", 10, 200, 50)
             
@@ -112,9 +105,9 @@ class AnalyticsDashboard:
                     start_date=start_date,
                     end_date=end_date,
                     max_results=max_results,
-                    enable_sentiment=enable_sentiment,
-                    enable_predictions=enable_predictions,
-                    enable_bottlenecks=enable_bottlenecks
+                    enable_sentiment=True,
+                    enable_predictions=True,
+                    enable_bottlenecks=True
                 )
             
             # Auto-refresh option
@@ -223,7 +216,7 @@ class AnalyticsDashboard:
             return
         
         # Organize charts in tabs
-        tab_names = ["Overview", "Time Analysis", "Team Performance", "Advanced Analytics"]
+        tab_names = ["Overview", "Team Performance"]
         tabs = st.tabs(tab_names)
         
         # Overview tab
@@ -242,27 +235,8 @@ class AnalyticsDashboard:
             if 'type_bar' in charts:
                 st.plotly_chart(charts['type_bar'], use_container_width=True)
         
-        # Time Analysis tab
-        with tabs[1]:
-            st.markdown("#### ⏰ Time Patterns & Trends")
-            
-            if 'hourly_pattern' in charts:
-                st.plotly_chart(charts['hourly_pattern'], use_container_width=True)
-            
-            col1, col2 = st.columns(2)
-            with col1:
-                if 'daily_pattern' in charts:
-                    st.plotly_chart(charts['daily_pattern'], use_container_width=True)
-            
-            with col2:
-                if 'resolution_priority' in charts:
-                    st.plotly_chart(charts['resolution_priority'], use_container_width=True)
-            
-            if 'monthly_trend' in charts:
-                st.plotly_chart(charts['monthly_trend'], use_container_width=True)
-        
         # Team Performance tab
-        with tabs[2]:
+        with tabs[1]:
             st.markdown("#### 👥 Team Analytics")
             
             col1, col2 = st.columns(2)
@@ -280,23 +254,6 @@ class AnalyticsDashboard:
             
             if 'team_sentiment' in charts:
                 st.plotly_chart(charts['team_sentiment'], use_container_width=True)
-        
-        # Advanced Analytics tab
-        with tabs[3]:
-            st.markdown("#### 🔮 AI-Powered Insights")
-            
-            col1, col2 = st.columns(2)
-            with col1:
-                if 'bottleneck_severity' in charts:
-                    st.plotly_chart(charts['bottleneck_severity'], use_container_width=True)
-                if 'potential_blockers' in charts:
-                    st.plotly_chart(charts['potential_blockers'], use_container_width=True)
-            
-            with col2:
-                if 'bottleneck_types' in charts:
-                    st.plotly_chart(charts['bottleneck_types'], use_container_width=True)
-                if 'feature_importance' in charts:
-                    st.plotly_chart(charts['feature_importance'], use_container_width=True)
     
     def _render_ai_insights(self, analytics_data: Dict[str, Any]):
         """Render AI-generated insights and recommendations."""
@@ -424,15 +381,6 @@ class AnalyticsDashboard:
                 df,
                 use_container_width=True,
                 hide_index=True
-            )
-            
-            # Download button for the data
-            csv = df.to_csv(index=False)
-            st.download_button(
-                label="📥 Download Issues Data as CSV",
-                data=csv,
-                file_name=f"jira_issues_analytics_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-                mime="text/csv"
             )
         else:
             st.warning("⚠️ No issue data could be processed for the table.")
