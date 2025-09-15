@@ -48,6 +48,9 @@ class AnalyticsDashboard:
         # Charts section
         self._render_charts_section(analytics_data)
         
+        # Issues table section
+        self._render_issues_table(analytics_data)
+        
         # AI Insights section
         self._render_ai_insights(analytics_data)
         
@@ -169,6 +172,7 @@ class AnalyticsDashboard:
                 
                 # Store in session state
                 st.session_state.analytics_data = analytics_data
+                st.session_state.raw_issues = issues  # Store raw issues for table display
                 st.session_state.issues_analyzed = len(issues)
                 st.session_state.last_updated = datetime.now()
                 
@@ -374,6 +378,65 @@ class AnalyticsDashboard:
             elif team_mood == 'Poor':
                 st.warning("😟 **Team Mood**: Negative sentiment detected - consider team check-in")
     
+    def _render_issues_table(self, analytics_data: Dict[str, Any]):
+        """Render table showing all issues used in analytics."""
+        st.subheader("📄 Issues Data Table")
+        st.markdown("*Reference table showing all Jira issues used for this analytics dashboard*")
+        
+        if 'raw_issues' not in st.session_state or not st.session_state.raw_issues:
+            st.warning("⚠️ No issues data available for display.")
+            return
+        
+        issues = st.session_state.raw_issues
+        
+        # Convert issues to DataFrame for display
+        issues_data = []
+        for issue in issues:
+            # Extract key information from each issue
+            issue_data = {
+                'Key': issue.get('key', 'N/A'),
+                'Summary': issue.get('summary', 'N/A')[:60] + ('...' if len(issue.get('summary', '')) > 60 else ''),
+                'Status': issue.get('status', 'N/A'),
+                'Priority': issue.get('priority', 'N/A'),
+                'Issue Type': issue.get('issuetype', 'N/A'),
+                'Assignee': issue.get('assignee', 'Unassigned'),
+                'Created': issue.get('created', 'N/A')[:10] if issue.get('created') else 'N/A',
+                'Updated': issue.get('updated', 'N/A')[:10] if issue.get('updated') else 'N/A'
+            }
+            issues_data.append(issue_data)
+        
+        if issues_data:
+            df = pd.DataFrame(issues_data)
+            
+            # Display metrics
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Total Issues", len(df))
+            with col2:
+                unique_statuses = df['Status'].nunique()
+                st.metric("Unique Statuses", unique_statuses)
+            with col3:
+                assigned_count = len(df[df['Assignee'] != 'Unassigned'])
+                st.metric("Assigned Issues", assigned_count)
+            
+            # Display the table
+            st.dataframe(
+                df,
+                use_container_width=True,
+                hide_index=True
+            )
+            
+            # Download button for the data
+            csv = df.to_csv(index=False)
+            st.download_button(
+                label="📥 Download Issues Data as CSV",
+                data=csv,
+                file_name=f"jira_issues_analytics_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                mime="text/csv"
+            )
+        else:
+            st.warning("⚠️ No issue data could be processed for the table.")
+
     def _render_raw_data_section(self, analytics_data: Dict[str, Any]):
         """Render raw analytics data in an expandable section."""
         with st.expander("📋 Raw Analytics Data", expanded=False):
