@@ -95,16 +95,16 @@ class JiraClient:
             logger.debug(f"Fetching all issues with JQL: {jql}")
             logger.debug(f"Using max_results limit: {max_results}")
             
-            # Get issues using JQL
-            issues = self.jira.jql(jql, limit=max_results)
+            # Use custom JQL method with proper endpoint and fields
+            response = self._execute_jql(jql, max_results)
             
-            if not issues or 'issues' not in issues:
+            if not response or 'issues' not in response:
                 logger.warning("No issues returned from Jira")
                 return []
             
             # Format issues for consumption
             formatted_issues = []
-            for issue in issues['issues']:
+            for issue in response['issues']:
                 formatted_issues.append(self._format_issue(issue))
             
             logger.info(f"Retrieved {len(formatted_issues)} issues")
@@ -164,16 +164,16 @@ class JiraClient:
             
             logger.debug(f"Fetching issues by status with JQL: {jql}")
             
-            # Get issues using JQL
-            issues = self.jira.jql(jql, limit=max_results)
+            # Use custom JQL method with proper endpoint and fields
+            response = self._execute_jql(jql, max_results)
             
-            if not issues or 'issues' not in issues:
+            if not response or 'issues' not in response:
                 logger.warning(f"No issues found with status: {status}")
                 return []
             
             # Format issues for consumption
             formatted_issues = []
-            for issue in issues['issues']:
+            for issue in response['issues']:
                 formatted_issues.append(self._format_issue(issue))
             
             logger.info(f"Retrieved {len(formatted_issues)} issues with status: {status}")
@@ -260,16 +260,16 @@ class JiraClient:
             
             logger.debug(f"Searching issues with JQL: {jql}")
             
-            # Get issues using JQL
-            issues = self.jira.jql(jql, limit=max_results)
+            # Use custom JQL method with proper endpoint and fields
+            response = self._execute_jql(jql, max_results)
             
-            if not issues or 'issues' not in issues:
+            if not response or 'issues' not in response:
                 logger.warning(f"No issues found for query: {query}")
                 return []
             
             # Format issues for consumption
             formatted_issues = []
-            for issue in issues['issues']:
+            for issue in response['issues']:
                 formatted_issues.append(self._format_issue(issue))
             
             logger.info(f"Found {len(formatted_issues)} issues for query: {query}")
@@ -361,6 +361,66 @@ class JiraClient:
         
         return user_field.get('displayName') or user_field.get('name') or 'Unknown User'
     
+    def _execute_jql(self, jql: str, max_results: int = None, fields: str = None) -> Dict[str, Any]:
+        """
+        Execute JQL query using the correct API endpoint with proper field specification.
+        
+        Args:
+            jql: JQL query string
+            max_results: Maximum number of results to return
+            fields: Comma-separated field list (required by company guidelines)
+            
+        Returns:
+            Jira API response dictionary
+        """
+        import time
+        
+        if max_results is None:
+            max_results = self.max_results
+        
+        # Default fields as required by company guidelines to avoid load-intensive queries
+        if fields is None:
+            fields = "summary,status,priority,assignee,reporter,created,updated,labels,issuetype,project"
+        
+        try:
+            # Use the correct API endpoint as per company guidelines
+            url = "/rest/api/2/search"
+            
+            params = {
+                'jql': jql,
+                'maxResults': max_results,
+                'fields': fields
+            }
+            
+            logger.debug(f"Executing JQL with correct endpoint: {url}")
+            logger.debug(f"Parameters: {params}")
+            
+            # Add small delay to avoid high-frequency queries as per guidelines
+            time.sleep(0.5)
+            
+            # Use direct GET request to correct endpoint
+            response = self.jira.get(url, params=params)
+            
+            logger.debug(f"JQL query successful. Response type: {type(response)}")
+            return response
+            
+        except Exception as e:
+            logger.error(f"JQL execution failed: {str(e)}")
+            logger.error(f"JQL: {jql}")
+            logger.error(f"URL: {url}")
+            logger.error(f"Params: {params}")
+            
+            # Enhanced HTTP error logging
+            if hasattr(e, 'response'):
+                logger.error(f"HTTP Status Code: {e.response.status_code}")
+                logger.error(f"HTTP Response Headers: {dict(e.response.headers)}")
+                try:
+                    logger.error(f"HTTP Response Body: {e.response.text}")
+                except:
+                    logger.error("Could not read HTTP response body")
+            
+            raise e
+    
     def health_check(self) -> bool:
         """
         Check if Jira client is healthy and can connect.
@@ -379,7 +439,7 @@ class JiraClient:
             test_jql = f"project = {self.project_key}"
             logger.debug(f"Testing JQL query: {test_jql}")
             
-            test_result = self.jira.jql(test_jql, limit=1)
+            test_result = self._execute_jql(test_jql, max_results=1)
             logger.info(f"✅ JQL test query successful. Response type: {type(test_result)}")
             
             return True
@@ -479,7 +539,7 @@ class JiraClient:
         # Test permissions
         try:
             test_jql = f"project = {self.project_key}"
-            result = self.jira.jql(test_jql, limit=1)
+            result = self._execute_jql(test_jql, max_results=1)
             diagnostics['permissions_check'] = {
                 'status': '✅ Can query project',
                 'test_jql': test_jql,
