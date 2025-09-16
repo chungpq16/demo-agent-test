@@ -119,6 +119,16 @@ class JiraClient:
             # Log more details about the Jira connection
             logger.error(f"Jira URL: {os.getenv('JIRA_URL')}")
             logger.error(f"Jira Username: {os.getenv('JIRA_USERNAME')}")
+            
+            # Enhanced HTTP error logging
+            if hasattr(e, 'response'):
+                logger.error(f"HTTP Status Code: {e.response.status_code}")
+                logger.error(f"HTTP Response Headers: {dict(e.response.headers)}")
+                try:
+                    logger.error(f"HTTP Response Body: {e.response.text}")
+                except:
+                    logger.error("Could not read HTTP response body")
+            
             import traceback
             logger.error(f"Full traceback: {traceback.format_exc()}")
             raise Exception(f"Failed to fetch issues: {str(e)} - Check logs for more details")
@@ -174,6 +184,16 @@ class JiraClient:
             logger.error(f"Exception type: {type(e).__name__}")
             logger.error(f"JQL used: {jql}")
             logger.error(f"Status filter: {status} -> {normalized_status}")
+            
+            # Enhanced HTTP error logging
+            if hasattr(e, 'response'):
+                logger.error(f"HTTP Status Code: {e.response.status_code}")
+                logger.error(f"HTTP Response Headers: {dict(e.response.headers)}")
+                try:
+                    logger.error(f"HTTP Response Body: {e.response.text}")
+                except:
+                    logger.error("Could not read HTTP response body")
+            
             import traceback
             logger.error(f"Full traceback: {traceback.format_exc()}")
             raise Exception(f"Failed to fetch issues by status: {str(e)} - Check logs for more details")
@@ -261,6 +281,16 @@ class JiraClient:
             logger.error(f"Original query: {query}")
             logger.error(f"JQL used: {jql}")
             logger.error(f"Is JQL: {is_jql}")
+            
+            # Enhanced HTTP error logging
+            if hasattr(e, 'response'):
+                logger.error(f"HTTP Status Code: {e.response.status_code}")
+                logger.error(f"HTTP Response Headers: {dict(e.response.headers)}")
+                try:
+                    logger.error(f"HTTP Response Body: {e.response.text}")
+                except:
+                    logger.error("Could not read HTTP response body")
+            
             import traceback
             logger.error(f"Full traceback: {traceback.format_exc()}")
             raise Exception(f"Failed to search issues: {str(e)} - Check logs for more details")
@@ -383,6 +413,7 @@ class JiraClient:
         diagnostics = {
             'config_check': {},
             'connection_check': {},
+            'project_check': {},
             'permissions_check': {},
             'overall_status': 'unknown'
         }
@@ -421,6 +452,30 @@ class JiraClient:
                 'error_type': type(e).__name__
             }
         
+        # Test project access
+        try:
+            project_info = self.jira.project(self.project_key)
+            diagnostics['project_check'] = {
+                'status': '✅ Project accessible',
+                'project_name': project_info.get('name', 'Unknown'),
+                'project_type': project_info.get('projectTypeKey', 'Unknown')
+            }
+        except Exception as e:
+            error_details = {
+                'status': '❌ Cannot access project',
+                'error': str(e),
+                'error_type': type(e).__name__,
+                'project_key': self.project_key
+            }
+            
+            if hasattr(e, 'response'):
+                error_details.update({
+                    'http_status': e.response.status_code,
+                    'http_reason': e.response.reason if hasattr(e.response, 'reason') else 'Unknown'
+                })
+            
+            diagnostics['project_check'] = error_details
+        
         # Test permissions
         try:
             test_jql = f"project = {self.project_key}"
@@ -431,23 +486,40 @@ class JiraClient:
                 'issues_found': len(result.get('issues', [])) if result else 0
             }
         except Exception as e:
-            diagnostics['permissions_check'] = {
+            error_details = {
                 'status': '❌ Cannot query project',
                 'error': str(e),
+                'error_type': type(e).__name__,
                 'test_jql': f"project = {self.project_key}"
             }
+            
+            # Enhanced HTTP error logging for diagnostics
+            if hasattr(e, 'response'):
+                error_details.update({
+                    'http_status': e.response.status_code,
+                    'http_reason': e.response.reason if hasattr(e.response, 'reason') else 'Unknown'
+                })
+                try:
+                    error_details['http_body'] = e.response.text[:500]  # First 500 chars
+                except:
+                    error_details['http_body'] = 'Could not read response body'
+            
+            diagnostics['permissions_check'] = error_details
         
         # Determine overall status
         config_ok = all('✅' in str(v) for v in diagnostics['config_check'].values() if isinstance(v, str))
         connection_ok = '✅' in diagnostics['connection_check'].get('status', '')
+        project_ok = '✅' in diagnostics['project_check'].get('status', '')
         permissions_ok = '✅' in diagnostics['permissions_check'].get('status', '')
         
-        if config_ok and connection_ok and permissions_ok:
+        if config_ok and connection_ok and project_ok and permissions_ok:
             diagnostics['overall_status'] = '✅ All systems operational'
         elif not config_ok:
             diagnostics['overall_status'] = '❌ Configuration incomplete'
         elif not connection_ok:
             diagnostics['overall_status'] = '❌ Connection failed'
+        elif not project_ok:
+            diagnostics['overall_status'] = '❌ Project inaccessible'
         elif not permissions_ok:
             diagnostics['overall_status'] = '❌ Permission denied'
         else:
