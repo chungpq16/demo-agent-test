@@ -546,9 +546,25 @@ Always provide helpful, clear responses based on the Jira data returned."""
                 
         except Exception as e:
             logger.error(f"Error executing function {function_name}: {str(e)}")
+            logger.error(f"Exception type: {type(e).__name__}")
+            logger.error(f"Function arguments: {function_args}")
+            
+            # Log diagnostic information for Jira-related errors
+            if function_name.startswith('get_jira') or function_name == 'search_jira_issues':
+                try:
+                    diagnostics = self.jira_client.diagnostic_check()
+                    logger.error(f"Jira diagnostics: {diagnostics}")
+                except Exception as diag_e:
+                    logger.error(f"Failed to run diagnostics: {str(diag_e)}")
+            
+            import traceback
+            logger.error(f"Full traceback: {traceback.format_exc()}")
+            
             return {
                 "success": False,
-                "error": str(e)
+                "error": str(e),
+                "error_type": type(e).__name__,
+                "function": function_name
             }
     
     def health_check(self) -> Dict[str, bool]:

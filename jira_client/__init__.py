@@ -33,8 +33,21 @@ class JiraClient:
         jira_token = os.getenv('JIRA_TOKEN')
         self.project_key = os.getenv('JIRA_PROJECT')
         
+        logger.debug(f"Setting up Jira client with URL: {jira_url}")
+        logger.debug(f"Username: {jira_username}")
+        logger.debug(f"Project key: {self.project_key}")
+        logger.debug(f"Token provided: {'Yes' if jira_token else 'No'}")
+        
         if not all([jira_url, jira_username, jira_token, self.project_key]):
-            raise ValueError("Missing required Jira environment variables")
+            missing = []
+            if not jira_url: missing.append('JIRA_URL')
+            if not jira_username: missing.append('JIRA_USERNAME')
+            if not jira_token: missing.append('JIRA_TOKEN')
+            if not self.project_key: missing.append('JIRA_PROJECT')
+            
+            error_msg = f"Missing required Jira environment variables: {', '.join(missing)}"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
         
         try:
             self.jira = Jira(
@@ -46,9 +59,22 @@ class JiraClient:
             
             logger.debug(f"Jira client configured for: {jira_url}")
             
+            # Test the connection by trying to get server info
+            try:
+                server_info = self.jira.server_info()
+                logger.info(f"Successfully connected to Jira. Server version: {server_info.get('version', 'Unknown')}")
+            except Exception as test_e:
+                logger.warning(f"Jira client created but connection test failed: {str(test_e)}")
+                logger.warning("This might indicate authentication issues or network problems")
+            
         except Exception as e:
             logger.error(f"Failed to initialize Jira client: {str(e)}")
-            raise Exception(f"Jira client initialization failed: {str(e)}")
+            logger.error(f"Exception type: {type(e).__name__}")
+            logger.error(f"URL: {jira_url}")
+            logger.error(f"Username: {jira_username}")
+            import traceback
+            logger.error(f"Full traceback: {traceback.format_exc()}")
+            raise Exception(f"Jira client initialization failed: {str(e)} - Check credentials and network connectivity")
     
     def get_all_issues(self, max_results: int = None) -> List[Dict[str, Any]]:
         """
@@ -67,6 +93,7 @@ class JiraClient:
             jql = f"project = {self.project_key} ORDER BY created DESC"
             
             logger.debug(f"Fetching all issues with JQL: {jql}")
+            logger.debug(f"Using max_results limit: {max_results}")
             
             # Get issues using JQL
             issues = self.jira.jql(jql, limit=max_results)
@@ -85,7 +112,16 @@ class JiraClient:
             
         except Exception as e:
             logger.error(f"Error fetching all issues: {str(e)}")
-            raise Exception(f"Failed to fetch issues: {str(e)}")
+            logger.error(f"Exception type: {type(e).__name__}")
+            logger.error(f"JQL used: {jql}")
+            logger.error(f"Project key: {self.project_key}")
+            logger.error(f"Max results: {max_results}")
+            # Log more details about the Jira connection
+            logger.error(f"Jira URL: {os.getenv('JIRA_URL')}")
+            logger.error(f"Jira Username: {os.getenv('JIRA_USERNAME')}")
+            import traceback
+            logger.error(f"Full traceback: {traceback.format_exc()}")
+            raise Exception(f"Failed to fetch issues: {str(e)} - Check logs for more details")
     
     def get_issues_by_status(self, status: str, max_results: int = None) -> List[Dict[str, Any]]:
         """
@@ -135,7 +171,12 @@ class JiraClient:
             
         except Exception as e:
             logger.error(f"Error fetching issues by status: {str(e)}")
-            raise Exception(f"Failed to fetch issues by status: {str(e)}")
+            logger.error(f"Exception type: {type(e).__name__}")
+            logger.error(f"JQL used: {jql}")
+            logger.error(f"Status filter: {status} -> {normalized_status}")
+            import traceback
+            logger.error(f"Full traceback: {traceback.format_exc()}")
+            raise Exception(f"Failed to fetch issues by status: {str(e)} - Check logs for more details")
     
     def get_issue_details(self, issue_key: str) -> Dict[str, Any]:
         """
@@ -165,7 +206,11 @@ class JiraClient:
             
         except Exception as e:
             logger.error(f"Error fetching issue details: {str(e)}")
-            raise Exception(f"Failed to fetch issue details: {str(e)}")
+            logger.error(f"Exception type: {type(e).__name__}")
+            logger.error(f"Issue key requested: {issue_key}")
+            import traceback
+            logger.error(f"Full traceback: {traceback.format_exc()}")
+            raise Exception(f"Failed to fetch issue details: {str(e)} - Check logs for more details")
     
     def search_issues(self, query: str, max_results: int = None) -> List[Dict[str, Any]]:
         """
@@ -212,7 +257,13 @@ class JiraClient:
             
         except Exception as e:
             logger.error(f"Error searching issues: {str(e)}")
-            raise Exception(f"Failed to search issues: {str(e)}")
+            logger.error(f"Exception type: {type(e).__name__}")
+            logger.error(f"Original query: {query}")
+            logger.error(f"JQL used: {jql}")
+            logger.error(f"Is JQL: {is_jql}")
+            import traceback
+            logger.error(f"Full traceback: {traceback.format_exc()}")
+            raise Exception(f"Failed to search issues: {str(e)} - Check logs for more details")
     
     def _format_issue(self, issue: Dict, detailed: bool = False) -> Dict[str, Any]:
         """
@@ -288,10 +339,118 @@ class JiraClient:
             True if healthy, False otherwise
         """
         try:
+            logger.info("Starting Jira health check...")
+            
             # Try to get server info as a health check
             server_info = self.jira.server_info()
-            logger.debug(f"Jira server info: {server_info}")
+            logger.info(f"✅ Jira health check passed. Server info: {server_info}")
+            
+            # Test a simple JQL query to ensure we can query issues
+            test_jql = f"project = {self.project_key}"
+            logger.debug(f"Testing JQL query: {test_jql}")
+            
+            test_result = self.jira.jql(test_jql, limit=1)
+            logger.info(f"✅ JQL test query successful. Response type: {type(test_result)}")
+            
             return True
+            
         except Exception as e:
-            logger.error(f"Jira health check failed: {str(e)}")
+            logger.error(f"❌ Jira health check failed: {str(e)}")
+            logger.error(f"Exception type: {type(e).__name__}")
+            logger.error(f"Project key tested: {self.project_key}")
+            
+            # Try to provide more specific error information
+            if "401" in str(e) or "Unauthorized" in str(e):
+                logger.error("🔑 Authentication failed - check JIRA_USERNAME and JIRA_TOKEN")
+            elif "403" in str(e) or "Forbidden" in str(e):
+                logger.error("🚫 Access forbidden - check user permissions for project")
+            elif "404" in str(e) or "Not Found" in str(e):
+                logger.error("📍 Resource not found - check JIRA_URL and JIRA_PROJECT")
+            elif "timeout" in str(e).lower() or "connection" in str(e).lower():
+                logger.error("🌐 Network connectivity issue - check JIRA_URL and network access")
+            
+            import traceback
+            logger.error(f"Full traceback: {traceback.format_exc()}")
             return False
+    
+    def diagnostic_check(self) -> Dict[str, Any]:
+        """
+        Perform comprehensive diagnostic check and return detailed results.
+        
+        Returns:
+            Dictionary with diagnostic information
+        """
+        diagnostics = {
+            'config_check': {},
+            'connection_check': {},
+            'permissions_check': {},
+            'overall_status': 'unknown'
+        }
+        
+        # Check configuration
+        try:
+            jira_url = os.getenv('JIRA_URL')
+            jira_username = os.getenv('JIRA_USERNAME') 
+            jira_token = os.getenv('JIRA_TOKEN')
+            project_key = os.getenv('JIRA_PROJECT')
+            
+            diagnostics['config_check'] = {
+                'jira_url': '✅ Set' if jira_url else '❌ Missing',
+                'jira_username': '✅ Set' if jira_username else '❌ Missing',
+                'jira_token': '✅ Set' if jira_token else '❌ Missing',
+                'project_key': '✅ Set' if project_key else '❌ Missing',
+                'url_value': jira_url if jira_url else 'Not set',
+                'username_value': jira_username if jira_username else 'Not set',
+                'project_value': project_key if project_key else 'Not set'
+            }
+        except Exception as e:
+            diagnostics['config_check']['error'] = str(e)
+        
+        # Test connection
+        try:
+            server_info = self.jira.server_info()
+            diagnostics['connection_check'] = {
+                'status': '✅ Connected',
+                'server_version': server_info.get('version', 'Unknown'),
+                'server_title': server_info.get('serverTitle', 'Unknown')
+            }
+        except Exception as e:
+            diagnostics['connection_check'] = {
+                'status': '❌ Connection failed',
+                'error': str(e),
+                'error_type': type(e).__name__
+            }
+        
+        # Test permissions
+        try:
+            test_jql = f"project = {self.project_key}"
+            result = self.jira.jql(test_jql, limit=1)
+            diagnostics['permissions_check'] = {
+                'status': '✅ Can query project',
+                'test_jql': test_jql,
+                'issues_found': len(result.get('issues', [])) if result else 0
+            }
+        except Exception as e:
+            diagnostics['permissions_check'] = {
+                'status': '❌ Cannot query project',
+                'error': str(e),
+                'test_jql': f"project = {self.project_key}"
+            }
+        
+        # Determine overall status
+        config_ok = all('✅' in str(v) for v in diagnostics['config_check'].values() if isinstance(v, str))
+        connection_ok = '✅' in diagnostics['connection_check'].get('status', '')
+        permissions_ok = '✅' in diagnostics['permissions_check'].get('status', '')
+        
+        if config_ok and connection_ok and permissions_ok:
+            diagnostics['overall_status'] = '✅ All systems operational'
+        elif not config_ok:
+            diagnostics['overall_status'] = '❌ Configuration incomplete'
+        elif not connection_ok:
+            diagnostics['overall_status'] = '❌ Connection failed'
+        elif not permissions_ok:
+            diagnostics['overall_status'] = '❌ Permission denied'
+        else:
+            diagnostics['overall_status'] = '⚠️ Partial functionality'
+        
+        return diagnostics
