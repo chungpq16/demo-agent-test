@@ -59,10 +59,10 @@ class JiraClient:
             
             logger.debug(f"Jira client configured for: {jira_url}")
             
-            # Test the connection by trying to get server info
+            # Test the connection by trying to get current user info
             try:
-                server_info = self.jira.server_info()
-                logger.info(f"Successfully connected to Jira. Server version: {server_info.get('version', 'Unknown')}")
+                current_user = self.jira.myself()
+                logger.info(f"Successfully connected to Jira. Connected as: {current_user.get('displayName', 'Unknown')}")
             except Exception as test_e:
                 logger.warning(f"Jira client created but connection test failed: {str(test_e)}")
                 logger.warning("This might indicate authentication issues or network problems")
@@ -341,9 +341,9 @@ class JiraClient:
         try:
             logger.info("Starting Jira health check...")
             
-            # Try to get server info as a health check
-            server_info = self.jira.server_info()
-            logger.info(f"✅ Jira health check passed. Server info: {server_info}")
+            # Try to get current user info as a health check
+            current_user = self.jira.myself()
+            logger.info(f"✅ Jira health check passed. Connected as: {current_user.get('displayName', 'Unknown')}")
             
             # Test a simple JQL query to ensure we can query issues
             test_jql = f"project = {self.project_key}"
@@ -408,11 +408,11 @@ class JiraClient:
         
         # Test connection
         try:
-            server_info = self.jira.server_info()
+            current_user = self.jira.myself()
             diagnostics['connection_check'] = {
                 'status': '✅ Connected',
-                'server_version': server_info.get('version', 'Unknown'),
-                'server_title': server_info.get('serverTitle', 'Unknown')
+                'connected_user': current_user.get('displayName', 'Unknown'),
+                'user_account_id': current_user.get('accountId', 'Unknown')
             }
         except Exception as e:
             diagnostics['connection_check'] = {
