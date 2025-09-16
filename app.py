@@ -95,14 +95,6 @@ class StreamlitJiraApp:
     
     def _render_navigation(self):
         """Render the top navigation."""
-        # Check if we should show instructions tab by default
-        if st.session_state.get('show_instructions', False):
-            # Reset the flag and set default tab to instructions
-            st.session_state.show_instructions = False
-            default_tab = 2  # Instructions tab (0-indexed)
-        else:
-            default_tab = 0  # Chat Assistant tab (default)
-        
         # Navigation tabs
         tab1, tab2, tab3 = st.tabs(["💬 Chat Assistant", "📊 Analytics Dashboard", "📖 Instructions"])
         
@@ -173,15 +165,8 @@ class StreamlitJiraApp:
         """Render the chat interface."""
         st.header("💬 Chat with your Jira Assistant")
         
-        # Add helpful note with link to Instructions
-        col1, col2 = st.columns([3, 1])
-        with col1:
-            st.info("💡 **New to the app?** Let me help you learn how to use this powerful AI assistant! Check out our comprehensive guide to get started with natural language queries, advanced filtering, and analytics dashboard.")
-        with col2:
-            if st.button("📖 View Instructions", type="secondary", help="Click to learn how to use all features"):
-                # Set a session state flag to switch to instructions tab
-                st.session_state.show_instructions = True
-                st.rerun()
+        # Add helpful note with guidance to Instructions tab
+        st.info("💡 **New to the app?** Let me help you learn how to use this powerful AI assistant! Click on the **📖 Instructions** tab above to access our comprehensive guide with examples for natural language queries, advanced filtering, and analytics dashboard features.")
         
         # Initialize chat history
         if 'chat_history' not in st.session_state:
