@@ -102,110 +102,63 @@ class JiraOrchestrator:
                 }
             },
             {
-                "name": "get_jira_issues_by_label",
-                "description": "Get Jira issues filtered by label",
+                "name": "get_jira_issues_advanced_filter",
+                "description": "Get Jira issues with advanced filtering capabilities supporting multiple criteria, operators, and complex queries",
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "label": {
+                        "filters": {
+                            "type": "array",
+                            "description": "Array of filter objects to apply",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "field": {
+                                        "type": "string",
+                                        "description": "Field to filter by",
+                                        "enum": ["status", "priority", "assignee", "reporter", "labels", "components", "summary", "description", "created", "updated", "issuetype", "fixVersion", "affectedVersion"]
+                                    },
+                                    "operator": {
+                                        "type": "string",
+                                        "description": "Operator to use for filtering",
+                                        "enum": ["=", "!=", "IN", "NOT IN", "~", "!~", "IS EMPTY", "IS NOT EMPTY", ">", "<", ">=", "<="]
+                                    },
+                                    "values": {
+                                        "type": "array",
+                                        "items": {"type": "string"},
+                                        "description": "Values to filter by (array for IN/NOT IN operators, single value for others)"
+                                    },
+                                    "logic": {
+                                        "type": "string",
+                                        "description": "Logic operator to combine with next filter",
+                                        "enum": ["AND", "OR"],
+                                        "default": "AND"
+                                    }
+                                },
+                                "required": ["field", "operator", "values"]
+                            }
+                        },
+                        "text_search": {
                             "type": "string",
-                            "description": "Label to filter by (e.g., 'frontend', 'backend', 'bug', 'feature')"
+                            "description": "Text to search in summary and description fields"
+                        },
+                        "order_by": {
+                            "type": "string",
+                            "description": "Field to order results by",
+                            "enum": ["created", "updated", "priority", "status", "assignee", "reporter", "key"],
+                            "default": "created"
+                        },
+                        "order_direction": {
+                            "type": "string",
+                            "description": "Direction to order results",
+                            "enum": ["ASC", "DESC"],
+                            "default": "DESC"
                         },
                         "max_results": {
                             "type": "integer",
-                            "description": "Maximum number of results to return (will use configured limit if not specified)"
+                            "description": "Maximum number of results to return"
                         }
-                    },
-                    "required": ["label"]
-                }
-            },
-            {
-                "name": "get_jira_issues_by_severity",
-                "description": "Get Jira issues filtered by severity/priority",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "severity": {
-                            "type": "string",
-                            "description": "Severity/priority to filter by",
-                            "enum": ["Critical", "High", "Medium", "Low", "Blocker", "Major", "Minor", "Trivial"]
-                        },
-                        "max_results": {
-                            "type": "integer",
-                            "description": "Maximum number of results to return (will use configured limit if not specified)"
-                        }
-                    },
-                    "required": ["severity"]
-                }
-            },
-            {
-                "name": "get_jira_issues_by_text_and_status",
-                "description": "Get Jira issues that contain specific text/keywords in title or description AND have a specific status",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "text_query": {
-                            "type": "string",
-                            "description": "Text to search for in issue title or description (e.g., 'GenAI', 'authentication', 'login')"
-                        },
-                        "status": {
-                            "type": "string",
-                            "description": "Status to filter by",
-                            "enum": ["Open", "In Progress", "Done", "Closed", "Resolved", "TO-DO", "To Do"]
-                        },
-                        "max_results": {
-                            "type": "integer",
-                            "description": "Maximum number of results to return (will use configured limit if not specified)"
-                        }
-                    },
-                    "required": ["text_query", "status"]
-                }
-            },
-            {
-                "name": "get_jira_issues_by_priority_and_status",
-                "description": "Get Jira issues filtered by both priority/severity AND status",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "priority": {
-                            "type": "string",
-                            "description": "Priority/severity to filter by",
-                            "enum": ["Critical", "High", "Medium", "Low", "Blocker", "Major", "Minor", "Trivial"]
-                        },
-                        "status": {
-                            "type": "string",
-                            "description": "Status to filter by",
-                            "enum": ["Open", "In Progress", "Done", "Closed", "Resolved", "TO-DO", "To Do"]
-                        },
-                        "max_results": {
-                            "type": "integer",
-                            "description": "Maximum number of results to return (will use configured limit if not specified)"
-                        }
-                    },
-                    "required": ["priority", "status"]
-                }
-            },
-            {
-                "name": "get_jira_issues_by_label_and_status",
-                "description": "Get Jira issues filtered by both label AND status",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "label": {
-                            "type": "string",
-                            "description": "Label to filter by (e.g., 'Exam', 'frontend', 'backend', 'bug')"
-                        },
-                        "status": {
-                            "type": "string",
-                            "description": "Status to filter by",
-                            "enum": ["Open", "In Progress", "Done", "Closed", "Resolved", "TO-DO", "To Do"]
-                        },
-                        "max_results": {
-                            "type": "integer",
-                            "description": "Maximum number of results to return (will use configured limit if not specified)"
-                        }
-                    },
-                    "required": ["label", "status"]
+                    }
                 }
             }
         ]
@@ -224,70 +177,67 @@ You have access to the following Jira operations:
 2. get_jira_issues_by_status: Get issues filtered by status (Open, In Progress, Done, Closed, Resolved)
 3. get_jira_issue_details: Get detailed information for a specific issue by key
 4. search_jira_issues: Search issues using text or JQL queries (for general content search)
-5. get_jira_issues_by_label: Get issues filtered by SPECIFIC label names (when user mentions exact label)
-6. get_jira_issues_by_severity: Get issues filtered by severity/priority (Critical, High, Medium, Low, etc.)
-7. get_jira_issues_by_text_and_status: Get issues containing specific text AND having specific status
-8. get_jira_issues_by_priority_and_status: Get issues with specific priority AND status
-9. get_jira_issues_by_label_and_status: Get issues with specific label AND status
+5. get_jira_issues_advanced_filter: Advanced filtering with multiple criteria, operators, and complex queries
 
 **CRITICAL DECISION RULES:**
 
 🗂️ **Use get_all_jira_issues when:**
 - User wants ALL issues from the project without any filtering
-- Examples: "Show me all jira issues", "Get all issues", "List all project issues", "What issues do we have?"
-
-🏷️ **Use get_jira_issues_by_label when:**
-- User asks for issues with a SPECIFIC label name or mentions "labeled" "label" (single filter only)
-- Examples: "Find issues labeled '2025'", "Show issues with label 'bug'", "Get all '2024' labeled issues"
-
-⚡ **Use get_jira_issues_by_severity when:**
-- User asks for issues with specific priority/severity levels (single filter only)
-- Examples: "Show high priority issues", "Find critical bugs", "Get low severity issues"
+- Examples: "Show me all jira issues", "Get all issues", "List all project issues"
 
 📋 **Use get_jira_issues_by_status when:**
-- User asks for issues by workflow status (single filter only)
+- User asks for issues by single status only (simple filter)
 - Examples: "Show open issues", "Get completed tasks", "What's in progress?"
 
 🔍 **Use search_jira_issues ONLY when:**
-- User asks for general content search or mentions topics/keywords (NOT labels or severity)
-- User wants to search within issue content (summary/description) with simple text
-- Examples: "Find login problems", "Issues about authentication", "Search for database errors"
+- User asks for simple text search within issue content
+- Examples: "Find login problems", "Issues about authentication"
 
-🎯 **Use COMBINATION functions for multi-criteria queries:**
+⚡ **Use get_jira_issues_advanced_filter for ALL COMPLEX queries:**
+- Multiple criteria (priority AND status, labels AND assignee, etc.)
+- Multiple values (multiple labels, assignees, components)
+- Negation queries (NOT, doesn't have, exclude)
+- Specific field filtering (priority, labels, components, assignee, etc.)
 
-📝 **Use get_jira_issues_by_text_and_status when:**
-- User wants issues containing specific text/keywords AND having specific status
-- Examples: "List all jira issues relate to GenAI and in Open Status", "Find authentication issues that are open"
+**Advanced Filter Examples:**
 
-⚡📋 **Use get_jira_issues_by_priority_and_status when:**
-- User wants issues with specific priority AND status
-- Examples: "List all jira issues in critical priority and in TO-DO Status", "Show high priority open issues"
+🏷️ **Labels:**
+- "Get issues with label A, B, C" → filters: [{"field": "labels", "operator": "IN", "values": ["A", "B", "C"]}]
+- "Issues that don't have labels A, B, C" → filters: [{"field": "labels", "operator": "NOT IN", "values": ["A", "B", "C"]}]
 
-🏷️📋 **Use get_jira_issues_by_label_and_status when:**
-- User wants issues with specific label AND status  
-- Examples: "List all jira issues with label 'Exam' and in Open Status", "Show bug labeled issues that are closed"
+� **Assignees:**
+- "Issues assigned to John, Jane, Bob" → filters: [{"field": "assignee", "operator": "IN", "values": ["John", "Jane", "Bob"]}]
+- "Unassigned issues" → filters: [{"field": "assignee", "operator": "IS EMPTY", "values": []}]
 
-💬 **For general questions, provide direct helpful responses without function calls:**
-- Questions about Jira concepts, workflow advice, best practices
-- "How do I create an issue?", "What's the difference between bug and story?"
+⚡ **Priority:**
+- "High or Critical priority issues" → filters: [{"field": "priority", "operator": "IN", "values": ["High", "Critical"]}]
+- "Not low priority" → filters: [{"field": "priority", "operator": "!=", "values": ["Low"]}]
 
-**IMPORTANT: Choose the RIGHT function based on the query complexity:**
-- Single filter → Use specific single-filter function
-- Multiple filters → Use appropriate combination function
-- General text search → Use search_jira_issues (NOT for labels or priority)
+🎯 **Multiple Criteria:**
+- "High priority open issues" → filters: [{"field": "priority", "operator": "=", "values": ["High"]}, {"field": "status", "operator": "=", "values": ["Open"]}]
+- "Issues with label 'bug' assigned to John" → filters: [{"field": "labels", "operator": "IN", "values": ["bug"]}, {"field": "assignee", "operator": "=", "values": ["John"]}]
 
-When a user asks about Jira issues, analyze their request carefully and call the appropriate function.
-After getting the results, provide a clear, human-readable summary of the information.
+🔍 **Text + Filters:**
+- "GenAI issues that are open" → filters: [{"field": "status", "operator": "=", "values": ["Open"]}], text_search: "GenAI"
+
+**Operators Guide:**
+- "=" : exact match
+- "!=" : not equal
+- "IN" : matches any of the values
+- "NOT IN" : doesn't match any of the values  
+- "~" : contains text
+- "!~" : doesn't contain text
+- "IS EMPTY" : field is empty/null
+- "IS NOT EMPTY" : field has value
+
+When users ask complex questions, analyze carefully and use get_jira_issues_advanced_filter with appropriate filters array.
 
 Examples:
 - "Show me all jira issues" → get_all_jira_issues
-- "List all jira issues relate to GenAI and in Open Status" → get_jira_issues_by_text_and_status with text_query="GenAI" and status="Open"
-- "List all jira issues in critical priority and in TO-DO Status" → get_jira_issues_by_priority_and_status with priority="Critical" and status="TO-DO"
-- "List all jira issues with label 'Exam' and in Open Status" → get_jira_issues_by_label_and_status with label="Exam" and status="Open"
-- "Show me all open issues" → get_jira_issues_by_status with status="Open"
-- "Get details for PROJ-123" → get_jira_issue_details with issue_key="PROJ-123"
-- "Find issues labeled '2025'" → get_jira_issues_by_label with label="2025"
-- "Find high priority issues" → get_jira_issues_by_severity with severity="High"
+- "Get open issues" → get_jira_issues_by_status with status="Open"
+- "Issues with labels A, B, C" → get_jira_issues_advanced_filter with filters=[{"field": "labels", "operator": "IN", "values": ["A", "B", "C"]}]
+- "High priority issues assigned to John or Jane" → get_jira_issues_advanced_filter with filters=[{"field": "priority", "operator": "=", "values": ["High"]}, {"field": "assignee", "operator": "IN", "values": ["John", "Jane"]}]
+- "Issues that don't have label 'old'" → get_jira_issues_advanced_filter with filters=[{"field": "labels", "operator": "NOT IN", "values": ["old"]}]
 
 Always provide helpful, clear responses based on the Jira data returned."""
     
@@ -448,97 +398,10 @@ Always provide helpful, clear responses based on the Jira data returned."""
                     "data": self.jira_client.search_issues(query=query, max_results=max_results)
                 }
             
-            elif function_name == "get_jira_issues_by_label":
-                label = function_args["label"]
-                max_results = function_args.get("max_results", self._current_max_results)
-                # Create JQL query to search by label
-                project_key = os.getenv('JIRA_PROJECT', 'PROJECT')
-                jql_query = f"project = {project_key} AND labels = {label} ORDER BY created DESC"
-                return {
-                    "success": True,
-                    "data": self.jira_client.search_issues(query=jql_query, max_results=max_results)
-                }
-            
-            elif function_name == "get_jira_issues_by_severity":
-                severity = function_args["severity"]
-                max_results = function_args.get("max_results", self._current_max_results)
-                # Create JQL query to search by priority (severity)
-                project_key = os.getenv('JIRA_PROJECT', 'PROJECT')
-                jql_query = f"project = {project_key} AND priority = {severity} ORDER BY created DESC"
-                return {
-                    "success": True,
-                    "data": self.jira_client.search_issues(query=jql_query, max_results=max_results)
-                }
-            
-            elif function_name == "get_jira_issues_by_text_and_status":
-                text_query = function_args["text_query"]
-                status = function_args["status"]
-                max_results = function_args.get("max_results", self._current_max_results)
-                
-                # Normalize status name
-                status_mapping = {
-                    'to-do': 'TO-DO',
-                    'todo': 'TO-DO', 
-                    'to do': 'To Do'
-                }
-                normalized_status = status_mapping.get(status.lower(), status)
-                
-                # Create JQL query to search by text content AND status
-                project_key = os.getenv('JIRA_PROJECT', 'PROJECT')
-                jql_query = f"project = {project_key} AND (summary ~ '{text_query}' OR description ~ '{text_query}') AND status = '{normalized_status}' ORDER BY created DESC"
-                return {
-                    "success": True,
-                    "data": self.jira_client.search_issues(query=jql_query, max_results=max_results)
-                }
-            
-            elif function_name == "get_jira_issues_by_priority_and_status":
-                priority = function_args["priority"]
-                status = function_args["status"]
-                max_results = function_args.get("max_results", self._current_max_results)
-                
-                # Normalize status name
-                status_mapping = {
-                    'to-do': 'TO-DO',
-                    'todo': 'TO-DO',
-                    'to do': 'To Do'
-                }
-                normalized_status = status_mapping.get(status.lower(), status)
-                
-                # Create JQL query to search by priority AND status
-                project_key = os.getenv('JIRA_PROJECT', 'PROJECT')
-                jql_query = f"project = {project_key} AND priority = {priority} AND status = '{normalized_status}' ORDER BY created DESC"
-                return {
-                    "success": True,
-                    "data": self.jira_client.search_issues(query=jql_query, max_results=max_results)
-                }
-            
-            elif function_name == "get_jira_issues_by_label_and_status":
-                label = function_args["label"]
-                status = function_args["status"]
-                max_results = function_args.get("max_results", self._current_max_results)
-                
-                # Normalize status name
-                status_mapping = {
-                    'to-do': 'TO-DO',
-                    'todo': 'TO-DO',
-                    'to do': 'To Do'
-                }
-                normalized_status = status_mapping.get(status.lower(), status)
-                
-                # Create JQL query to search by label AND status
-                project_key = os.getenv('JIRA_PROJECT', 'PROJECT')
-                jql_query = f"project = {project_key} AND labels = {label} AND status = '{normalized_status}' ORDER BY created DESC"
-                return {
-                    "success": True,
-                    "data": self.jira_client.search_issues(query=jql_query, max_results=max_results)
-                }
-            
+            elif function_name == "get_jira_issues_advanced_filter":
+                return self._handle_advanced_filter(function_args)
             
             else:
-                return {
-                    "success": False,
-                    "error": f"Unknown function: {function_name}"
-                }
                 return {
                     "success": False,
                     "error": f"Unknown function: {function_name}"
@@ -566,6 +429,170 @@ Always provide helpful, clear responses based on the Jira data returned."""
                 "error_type": type(e).__name__,
                 "function": function_name
             }
+    
+    def _handle_advanced_filter(self, function_args: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Handle advanced filter requests with dynamic JQL generation.
+        
+        Args:
+            function_args: Arguments from the LLM function call
+            
+        Returns:
+            Function execution result
+        """
+        try:
+            filters = function_args.get("filters", [])
+            text_search = function_args.get("text_search")
+            order_by = function_args.get("order_by", "created")
+            order_direction = function_args.get("order_direction", "DESC")
+            max_results = function_args.get("max_results", self._current_max_results)
+            
+            # Generate JQL query dynamically
+            jql_query = self._generate_dynamic_jql(filters, text_search, order_by, order_direction)
+            
+            logger.debug(f"Generated dynamic JQL: {jql_query}")
+            
+            return {
+                "success": True,
+                "data": self.jira_client.search_issues(query=jql_query, max_results=max_results)
+            }
+            
+        except Exception as e:
+            logger.error(f"Error in advanced filter: {str(e)}")
+            return {
+                "success": False,
+                "error": str(e),
+                "function": "get_jira_issues_advanced_filter"
+            }
+    
+    def _generate_dynamic_jql(self, filters: List[Dict], text_search: Optional[str], 
+                             order_by: str, order_direction: str) -> str:
+        """
+        Generate JQL query dynamically based on filters.
+        
+        Args:
+            filters: List of filter dictionaries
+            text_search: Optional text search string
+            order_by: Field to order by
+            order_direction: Order direction (ASC/DESC)
+            
+        Returns:
+            Generated JQL query string
+        """
+        project_key = os.getenv('JIRA_PROJECT', 'PROJECT')
+        jql_parts = [f"project = {project_key}"]
+        
+        # Process filters
+        for i, filter_obj in enumerate(filters):
+            field = filter_obj.get("field")
+            operator = filter_obj.get("operator")
+            values = filter_obj.get("values", [])
+            logic = filter_obj.get("logic", "AND")
+            
+            # Generate filter condition
+            condition = self._generate_filter_condition(field, operator, values)
+            if condition:
+                jql_parts.append(condition)
+        
+        # Add text search if provided
+        if text_search:
+            text_condition = f"(summary ~ '{text_search}' OR description ~ '{text_search}')"
+            jql_parts.append(text_condition)
+        
+        # Combine all conditions with AND
+        jql_query = " AND ".join(jql_parts)
+        
+        # Add ordering
+        jql_query += f" ORDER BY {order_by} {order_direction}"
+        
+        return jql_query
+    
+    def _generate_filter_condition(self, field: str, operator: str, values: List[str]) -> str:
+        """
+        Generate a single filter condition for JQL.
+        
+        Args:
+            field: Field name
+            operator: Operator type
+            values: Values to filter by
+            
+        Returns:
+            JQL condition string
+        """
+        if not field or not operator:
+            return ""
+        
+        # Handle field name mappings
+        field_mappings = {
+            "severity": "priority",
+            "assignee": "assignee",
+            "reporter": "reporter",
+            "labels": "labels",
+            "components": "component",
+            "summary": "summary",
+            "description": "description",
+            "status": "status",
+            "priority": "priority",
+            "created": "created",
+            "updated": "updated",
+            "issuetype": "issuetype",
+            "fixVersion": "fixVersion",
+            "affectedVersion": "affectedVersion"
+        }
+        
+        jql_field = field_mappings.get(field, field)
+        
+        # Handle different operators
+        if operator == "=":
+            if len(values) == 1:
+                return f"{jql_field} = '{values[0]}'"
+            else:
+                # Multiple values with = should use IN
+                values_str = ", ".join([f"'{v}'" for v in values])
+                return f"{jql_field} IN ({values_str})"
+                
+        elif operator == "!=":
+            if len(values) == 1:
+                return f"{jql_field} != '{values[0]}'"
+            else:
+                # Multiple values with != should use NOT IN
+                values_str = ", ".join([f"'{v}'" for v in values])
+                return f"{jql_field} NOT IN ({values_str})"
+                
+        elif operator == "IN":
+            if values:
+                values_str = ", ".join([f"'{v}'" for v in values])
+                return f"{jql_field} IN ({values_str})"
+            return ""
+            
+        elif operator == "NOT IN":
+            if values:
+                values_str = ", ".join([f"'{v}'" for v in values])
+                return f"{jql_field} NOT IN ({values_str})"
+            return ""
+            
+        elif operator == "~":
+            if values:
+                return f"{jql_field} ~ '{values[0]}'"
+            return ""
+            
+        elif operator == "!~":
+            if values:
+                return f"{jql_field} !~ '{values[0]}'"
+            return ""
+            
+        elif operator == "IS EMPTY":
+            return f"{jql_field} IS EMPTY"
+            
+        elif operator == "IS NOT EMPTY":
+            return f"{jql_field} IS NOT EMPTY"
+            
+        elif operator in [">", "<", ">=", "<="]:
+            if values:
+                return f"{jql_field} {operator} '{values[0]}'"
+            return ""
+        
+        return ""
     
     def health_check(self) -> Dict[str, bool]:
         """
