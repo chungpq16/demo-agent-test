@@ -84,11 +84,28 @@ class LLMFarmClient:
             
             messages = self._generate_messages(system_prompt, user_text)
             
+            # Log full request details
+            logger.debug("=" * 80)
+            logger.debug("REQUEST DETAILS:")
+            logger.debug(f"URL: {self.client.base_url}")
+            logger.debug(f"Model: {self.model}")
+            logger.debug(f"Headers: {self.client.default_headers}")
+            logger.debug(f"Messages: {messages}")
+            logger.debug(f"Extra Query: {{'api-version': '2024-08-01-preview'}}")
+            logger.debug("=" * 80)
+            
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=messages,
                 extra_query={"api-version": "2024-08-01-preview"}
             )
+            
+            # Log response details
+            logger.debug("RESPONSE DETAILS:")
+            logger.debug(f"Response ID: {response.id}")
+            logger.debug(f"Model: {response.model}")
+            logger.debug(f"Finish Reason: {response.choices[0].finish_reason}")
+            logger.debug("=" * 80)
             
             result = response.choices[0].message.content
             logger.info(f"Completion successful, response length: {len(result) if result else 0}")
@@ -117,6 +134,18 @@ class LLMFarmClient:
             
             messages = self._generate_messages(system_prompt, user_text)
             
+            # Log full request details
+            logger.debug("=" * 80)
+            logger.debug("REQUEST DETAILS (WITH FUNCTIONS):")
+            logger.debug(f"URL: {self.client.base_url}")
+            logger.debug(f"Model: {self.model}")
+            logger.debug(f"Headers: {self.client.default_headers}")
+            logger.debug(f"Messages: {messages}")
+            logger.debug(f"Functions: {functions}")
+            logger.debug(f"Function Call: {function_call or 'auto'}")
+            logger.debug(f"Extra Query: {{'api-version': '2024-08-01-preview'}}")
+            logger.debug("=" * 80)
+            
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=messages,
@@ -124,6 +153,16 @@ class LLMFarmClient:
                 function_call=function_call or "auto",
                 extra_query={"api-version": "2024-08-01-preview"}
             )
+            
+            # Log response details
+            logger.debug("RESPONSE DETAILS:")
+            logger.debug(f"Response ID: {response.id}")
+            logger.debug(f"Model: {response.model}")
+            logger.debug(f"Has Function Call: {hasattr(response.choices[0].message, 'function_call')}")
+            if hasattr(response.choices[0].message, 'function_call') and response.choices[0].message.function_call:
+                logger.debug(f"Function Called: {response.choices[0].message.function_call.name}")
+                logger.debug(f"Function Arguments: {response.choices[0].message.function_call.arguments}")
+            logger.debug("=" * 80)
             
             logger.info("Completion with functions successful")
             return response
